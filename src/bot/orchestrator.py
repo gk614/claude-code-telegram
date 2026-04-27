@@ -960,10 +960,34 @@ class MessageOrchestrator:
         user_id = update.effective_user.id
         message_text = update.message.text
 
+        # `??` escape hatch → use Opus 4.7 for this message and skip the
+        # router (the router middleware already lets it through). Strip the
+        # prefix from the prompt actually sent to Claude.
+        use_opus = False
+        if message_text and message_text.startswith("??"):
+            use_opus = True
+            message_text = message_text[2:].lstrip()
+
+        # 30-minute idle TTL → start a fresh Claude session instead of resuming
+        # an old one. Without this, an idle conversation keeps growing the
+        # input context (and the bill) every turn the user comes back.
+        ttl_force_new = False
+        last_activity_ts = context.user_data.get("last_activity_ts")
+        now_ts = time.time()
+        if last_activity_ts is not None and (now_ts - last_activity_ts) > 30 * 60:
+            ttl_force_new = True
+            logger.info(
+                "TTL elapsed → forcing new Claude session",
+                user_id=user_id,
+                idle_seconds=int(now_ts - last_activity_ts),
+            )
+
         logger.info(
             "Agentic text message",
             user_id=user_id,
-            message_length=len(message_text),
+            message_length=len(message_text or ""),
+            use_opus=use_opus,
+            ttl_force_new=ttl_force_new,
         )
 
         # Rate limit check
@@ -1012,7 +1036,11 @@ class MessageOrchestrator:
 
         # Check if /new was used — skip auto-resume for this first message.
         # Flag is only cleared after a successful run so retries keep the intent.
-        force_new = bool(context.user_data.get("force_new_session"))
+        force_new = bool(context.user_data.get("force_new_session")) or ttl_force_new
+        if ttl_force_new:
+            # Drop the stored session id too — otherwise the SDK resumes by
+            # explicit id even with force_new (force_new only blocks auto-resume).
+            session_id = None
 
         # --- Verbose progress tracking via stream callback ---
         tool_log: List[Dict[str, Any]] = []
@@ -1045,6 +1073,26 @@ class MessageOrchestrator:
         # Independent typing heartbeat — stays alive even with no stream events
         heartbeat = self._start_typing_heartbeat(chat)
 
+        # `??` prefix → swap claude_model to Opus 4.7 for this single call.
+        # Same monkeypatch+restore pattern as /fix uses for Haiku.
+        opus_swapped = False
+        opus_saved_model: Any = None
+        opus_config = getattr(claude_integration, "config", None)
+        if use_opus and opus_config is not None and hasattr(opus_config, "claude_model"):
+            opus_saved_model = opus_config.claude_model
+            try:
+                opus_config.claude_model = "claude-opus-4-7"
+                opus_swapped = True
+                # Notify the user upfront — Opus is slower and more expensive.
+                try:
+                    await progress_msg.edit_text(
+                        "🧠 Opus 4.7…", reply_markup=stop_kb
+                    )
+                except Exception:
+                    pass
+            except Exception:
+                logger.exception("?? Opus swap failed — falling back to default model")
+
         success = True
         try:
             claude_response = await claude_integration.run_command(
@@ -1058,10 +1106,12 @@ class MessageOrchestrator:
             )
 
             # New session created successfully — clear the one-shot flag
-            if force_new:
+            if context.user_data.get("force_new_session"):
                 context.user_data["force_new_session"] = False
 
             context.user_data["claude_session_id"] = claude_response.session_id
+            # Mark activity for the 30-min TTL check on the next message.
+            context.user_data["last_activity_ts"] = time.time()
 
             # Track directory changes
             from .handlers.message import _update_working_directory_from_claude_response
@@ -1114,6 +1164,13 @@ class MessageOrchestrator:
                     await draft_streamer.flush()
                 except Exception:
                     logger.debug("Draft flush failed in finally block", user_id=user_id)
+            # Restore claude_model after the `??` Opus swap, regardless of
+            # whether the call succeeded.
+            if opus_swapped and opus_config is not None:
+                try:
+                    opus_config.claude_model = opus_saved_model
+                except Exception:
+                    logger.exception("?? could not restore claude_model")
 
         try:
             await progress_msg.delete()

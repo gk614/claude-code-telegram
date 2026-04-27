@@ -38,6 +38,13 @@ async def router_middleware(handler: Callable, event: Any, data: Dict[str, Any])
         # Slash commands are handled by their own CommandHandlers; never route.
         return await handler(event, data)
 
+    if msg.text.startswith("??"):
+        # `??` prefix is the user's explicit "skip router, ask Opus" escape
+        # hatch. Do not classify (saves a Haiku call), pass straight to
+        # agentic_text — that handler strips the prefix and switches the
+        # model to Opus for this one call.
+        return await handler(event, data)
+
     user = event.effective_user
     chat = event.effective_chat
     if not user or not chat:
