@@ -1489,6 +1489,29 @@ class MessageOrchestrator:
 
             caption = (update.message.caption or "").strip()
 
+            # Save the photo bytes to <GENAOS_REPO_PATH>/inbox/photos/<msg_id>.<ext>
+            # so router-written rows can reference it as `📷 inbox/photos/...`.
+            # Resolves through the same env var the router uses (GENAOS_REPO_PATH).
+            # Anything that fails here is non-fatal — we still try to route.
+            photo_rel_path: Optional[str] = None
+            try:
+                import base64
+                import os as _os
+                from pathlib import Path as _Path
+                genaos_root = _Path(
+                    _os.environ.get("GENAOS_REPO_PATH", "/root/GenaOS")
+                )
+                photos_dir = genaos_root / "inbox" / "photos"
+                photos_dir.mkdir(parents=True, exist_ok=True)
+                ext = "jpg" if fmt in ("jpeg", "jpg") else fmt
+                fname = f"{update.message.message_id}.{ext}"
+                (photos_dir / fname).write_bytes(
+                    base64.b64decode(processed_image.base64_data),
+                )
+                photo_rel_path = f"inbox/photos/{fname}"
+            except Exception:
+                logger.exception("Failed to persist photo bytes (non-fatal)")
+
             # Photo → router pipeline. Two branches:
             #  - caption present → caption is the categorisation signal (cheap,
             #    no OCR call). Image referenced as context in the file row.
@@ -1535,6 +1558,7 @@ class MessageOrchestrator:
                             message_id=update.message.message_id,
                             chat_id=chat.id,
                             ts=_dt.now(UTC),
+                            attachments=[photo_rel_path] if photo_rel_path else None,
                         )
                         logger.info(
                             "photo → router decision",

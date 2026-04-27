@@ -46,6 +46,38 @@ async def router_middleware(handler: Callable, event: Any, data: Dict[str, Any])
         # and swaps config.claude_model accordingly.
         return await handler(event, data)
 
+    # Forward + reply bundle: if this message is a reply to an earlier
+    # forwarded message, the user is commenting on that forward
+    # ("идея на основе этого поста"). Bundle the comment with the forward
+    # body so the router sees the full context. The user's text remains the
+    # primary categorisation signal; the forward is appended as a quoted
+    # source block. Final formatting (separate column? blockquote?) is a
+    # decision for the protocol session — for now both go into the verbatim
+    # original column of the table.
+    bundled_text = msg.text
+    reply = getattr(msg, "reply_to_message", None)
+    if reply is not None:
+        forward_origin = (
+            getattr(reply, "forward_origin", None)
+            or getattr(reply, "forward_from", None)
+            or getattr(reply, "forward_from_chat", None)
+            or getattr(reply, "forward_date", None)
+        )
+        if forward_origin is not None:
+            forward_body = (reply.text or reply.caption or "").strip()
+            source_label = _describe_forward_origin(reply)
+            if forward_body:
+                bundled_text = (
+                    f"{msg.text}\n\n"
+                    f"Источник (forward от {source_label}):\n{forward_body}"
+                )
+            logger.info(
+                "router: forward+reply bundle detected",
+                comment_len=len(msg.text),
+                forward_len=len(forward_body),
+                source=source_label,
+            )
+
     user = event.effective_user
     chat = event.effective_chat
     if not user or not chat:
@@ -61,7 +93,7 @@ async def router_middleware(handler: Callable, event: Any, data: Dict[str, Any])
 
     try:
         result = process(
-            text=msg.text,
+            text=bundled_text,
             user_id=user.id,
             message_id=msg.message_id,
             chat_id=chat.id,
@@ -99,6 +131,26 @@ async def router_middleware(handler: Callable, event: Any, data: Dict[str, Any])
     # Router fully handled the message — do not call handler; middleware wrapper
     # in core.py will raise ApplicationHandlerStop to halt the chain.
     return None
+
+
+def _describe_forward_origin(msg: Any) -> str:
+    """Best-effort human label for where a forwarded message came from."""
+    fo = getattr(msg, "forward_origin", None)
+    if fo is not None:
+        # python-telegram-bot v20+: MessageOriginUser / MessageOriginChannel etc.
+        if hasattr(fo, "sender_user") and fo.sender_user:
+            return fo.sender_user.full_name or fo.sender_user.username or "user"
+        if hasattr(fo, "chat") and fo.chat:
+            return getattr(fo.chat, "title", None) or getattr(fo.chat, "username", "channel")
+        if hasattr(fo, "sender_user_name") and fo.sender_user_name:
+            return fo.sender_user_name
+    user = getattr(msg, "forward_from", None)
+    if user is not None:
+        return user.full_name or user.username or "user"
+    chat = getattr(msg, "forward_from_chat", None)
+    if chat is not None:
+        return chat.title or chat.username or "channel"
+    return "external"
 
 
 def _build_keyboard(payload: Dict[str, Any]) -> InlineKeyboardMarkup:

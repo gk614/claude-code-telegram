@@ -316,6 +316,22 @@ async def run_application(app: Dict[str, Any]) -> None:
             await scheduler.start()
             logger.info("Job scheduler enabled")
 
+            # GenaOS-specific cron jobs (idempotent — skips already-registered)
+            try:
+                from src.scheduler.genaos_jobs import register_default_jobs
+
+                allowed = list(config.allowed_users or [])
+                await register_default_jobs(
+                    scheduler=scheduler,
+                    target_chat_ids=allowed,
+                    working_directory=config.approved_directory,
+                    created_by=allowed[0] if allowed else 0,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to register GenaOS default cron jobs (non-fatal)"
+                )
+
         # Shutdown task
         shutdown_task = asyncio.create_task(shutdown_event.wait())
         tasks.append(shutdown_task)
