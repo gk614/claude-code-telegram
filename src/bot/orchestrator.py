@@ -396,6 +396,17 @@ class MessageOrchestrator:
             )
         )
 
+        # Inbox-router callbacks (routing_unsure inline keyboard)
+        if self.settings.router_enabled:
+            from .handlers.router_callback import handle_router_callback
+
+            app.add_handler(
+                CallbackQueryHandler(
+                    self._inject_deps(handle_router_callback),
+                    pattern=r"^router:",
+                )
+            )
+
         logger.info("Agentic handlers registered")
 
     def _register_classic_handlers(self, app: Application) -> None:

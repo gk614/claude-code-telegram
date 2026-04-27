@@ -330,6 +330,37 @@ class Settings(BaseSettings):
         ge=0.0,
     )
 
+    # Inbox-router (GenaOS pre-filter middleware)
+    router_enabled: bool = Field(
+        False,
+        description=(
+            "Enable GenaOS inbox-router pre-filter (Haiku 4.5 classifier). "
+            "Requires GENAOS_REPO_PATH set."
+        ),
+    )
+    genaos_repo_path: Optional[Path] = Field(
+        None,
+        description=(
+            "Path to GenaOS repo on disk. Bot imports inbox_router from "
+            "<path>/scripts via sys.path injection at startup."
+        ),
+    )
+    cost_alert_day: float = Field(
+        10.0,
+        description="Telegram alert when today's API cost exceeds this USD threshold",
+        ge=0.0,
+    )
+    cost_alert_request: float = Field(
+        1.0,
+        description="Telegram alert when a single API request exceeds this USD threshold",
+        ge=0.0,
+    )
+    cost_alert_month: float = Field(
+        50.0,
+        description="Telegram alert when month-todate API cost exceeds this USD threshold",
+        ge=0.0,
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
@@ -497,6 +528,24 @@ class Settings(BaseSettings):
             if not self.projects_config_path:
                 raise ValueError(
                     "projects_config_path required when enable_project_threads is True"
+                )
+
+        # Inbox-router requires a valid GenaOS repo path with scripts/inbox_router.py
+        if self.router_enabled:
+            if not self.genaos_repo_path:
+                raise ValueError(
+                    "genaos_repo_path required when router_enabled is True"
+                )
+            scripts_dir = self.genaos_repo_path / "scripts"
+            if not scripts_dir.exists():
+                raise ValueError(
+                    f"GenaOS scripts dir not found at {scripts_dir}. "
+                    f"Set genaos_repo_path to the GenaOS repo root."
+                )
+            if not (scripts_dir / "inbox_router.py").exists():
+                raise ValueError(
+                    f"inbox_router.py missing in {scripts_dir}. "
+                    f"Make sure the GenaOS repo is checked out at this path."
                 )
 
         return self

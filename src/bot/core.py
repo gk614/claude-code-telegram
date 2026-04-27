@@ -92,6 +92,9 @@ class ClaudeCodeBot:
         # HTTP client is ready before we make API calls.
         await self.app.initialize()
 
+        # Inject GenaOS scripts dir into sys.path so middleware can import inbox_router
+        self._inject_genaos_path()
+
         # Set bot commands for menu (requires initialized HTTP client)
         await self._set_bot_commands()
 
@@ -116,10 +119,33 @@ class ClaudeCodeBot:
         """Register handlers via orchestrator (mode-aware)."""
         self.orchestrator.register_handlers(self.app)
 
+    def _inject_genaos_path(self) -> None:
+        """Add GenaOS scripts dir to sys.path so middleware can import inbox_router.
+
+        Only runs when ROUTER_ENABLED=true. Validation that the path exists is
+        already done by Settings.validate_cross_field_dependencies — by this
+        point the path is trustworthy.
+        """
+        if not self.settings.router_enabled:
+            return
+        if not self.settings.genaos_repo_path:
+            logger.warning(
+                "router_enabled=true but genaos_repo_path unset; router will be disabled"
+            )
+            return
+        import sys
+
+        scripts_dir = self.settings.genaos_repo_path / "scripts"
+        scripts_dir_str = str(scripts_dir)
+        if scripts_dir_str not in sys.path:
+            sys.path.insert(0, scripts_dir_str)
+            logger.info("GenaOS scripts injected into sys.path", path=scripts_dir_str)
+
     def _add_middleware(self) -> None:
         """Add middleware to application."""
         from .middleware.auth import auth_middleware
         from .middleware.rate_limit import rate_limit_middleware
+        from .middleware.router import router_middleware
         from .middleware.security import security_middleware
 
         # Middleware runs in order of group numbers (lower = earlier)
@@ -145,6 +171,15 @@ class ClaudeCodeBot:
                 filters.ALL, self._create_middleware_handler(rate_limit_middleware)
             ),
             group=-1,
+        )
+
+        # Inbox-router (GenaOS pre-filter) — between rate_limit (-1) and
+        # message handlers (10). No-op when ROUTER_ENABLED=false.
+        self.app.add_handler(
+            MessageHandler(
+                filters.ALL, self._create_middleware_handler(router_middleware)
+            ),
+            group=0,
         )
 
         logger.info("Middleware added to bot")
