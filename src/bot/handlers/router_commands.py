@@ -267,16 +267,28 @@ _FIX_HELP_TEMPLATE = (
 
 
 def _build_fix_prompt(action: dict, instruction: str) -> str:
+    """Strict prompt: one Read of the target file, one Edit, one short
+    confirmation. No exploration, no other files read.
+
+    The prompt fights Sonnet/Haiku's default "orient yourself first" instinct
+    that otherwise burns turns on Read of CLAUDE.md / Strategy.md / etc."""
     return (
-        "[Запрос на правку записи inbox-router'а]\n"
+        "[Запрос на правку записи inbox-router'а]\n\n"
+        "СТРОГО ОГРАНИЧЕНИЕ — выполни ровно три шага:\n"
+        f"1. Read({action['target_file']}) — ТОЛЬКО этот файл\n"
+        f"2. Edit({action['target_file']}, ...) — измени строку с парафразой "
+        "и blockquote-оригиналом (если он есть)\n"
+        "3. Ответь ОДНОЙ короткой строкой: что именно изменил\n\n"
+        "ЗАПРЕЩЕНО:\n"
+        "- читать любые другие файлы (CLAUDE.md, Strategy.md, README, прочее)\n"
+        "- использовать Glob, Grep, Bash, ls, find\n"
+        "- задавать уточняющие вопросы\n"
+        "- объяснять что-либо помимо одной строки в шаге 3\n\n"
         f"Файл: {action['target_file']}\n"
         f"Категория: {action['category']}\n"
-        f"Текущая парафраза: {action['paraphrase']}\n"
-        f"Дословный оригинал пользователя: {action['raw_text']}\n\n"
-        f"Что поправить: {instruction}\n\n"
-        "Открой указанный файл, найди эту запись (ищи по парафразе или по "
-        "строке оригинала), отредактируй согласно инструкции, подтверди "
-        "одной строкой что именно изменил."
+        f"Текущая парафраза в файле: {action['paraphrase']}\n"
+        f"Дословный оригинал пользователя (для контекста): {action['raw_text']}\n\n"
+        f"Что поправить: {instruction}"
     )
 
 
@@ -331,13 +343,25 @@ async def handle_fix(
     )
     session_id = context.user_data.get("claude_session_id")
 
-    progress: Optional[Any] = await update.message.reply_text("✏️ Sonnet правит запись…")
+    progress: Optional[Any] = await update.message.reply_text("✏️ Haiku правит запись…")
 
-    # IMPORTANT: force_new=True keeps /fix cheap. Without it, Sonnet auto-resumes
-    # the user's running Telegram session and the entire chat history gets
-    # billed as input on every turn — measured at ~$0.30+ per fix during
-    # smoke testing. With force_new, only the prompt + Read of the target
-    # file go in → typically <$0.02.
+    # Cost defenses for /fix:
+    #   - force_new=True: avoid auto-resuming the user's chat session (history
+    #     would be billed every turn — measured at $0.32+ during smoke test).
+    #   - claude_model = Haiku 4.5 for the duration of this call: ~3.75× cheaper
+    #     than Sonnet on input, fine for one Read+Edit. Restored afterwards.
+    #   - prompt explicitly forbids Glob/Grep/extra Reads (see _build_fix_prompt).
+    config = getattr(claude_integration, "config", None)
+    saved_model: Any = None
+    swapped_model = False
+    if config is not None and hasattr(config, "claude_model"):
+        saved_model = config.claude_model
+        try:
+            config.claude_model = "claude-haiku-4-5-20251001"
+            swapped_model = True
+        except Exception:
+            logger.exception("/fix could not swap to Haiku — falling back to Sonnet")
+
     try:
         claude_response = await claude_integration.run_command(
             prompt=prompt,
@@ -353,6 +377,12 @@ async def handle_fix(
         except Exception:
             pass
         return
+    finally:
+        if swapped_model and config is not None:
+            try:
+                config.claude_model = saved_model
+            except Exception:
+                logger.exception("/fix could not restore claude_model — set explicitly")
 
     # NOTE: deliberately NOT writing claude_response.session_id back to
     # context.user_data["claude_session_id"] — that's the user's main
@@ -370,7 +400,10 @@ async def handle_fix(
     cost_suffix = ""
     cost = getattr(claude_response, "cost", 0.0) or 0.0
     if cost > 0:
-        cost_suffix = f"\n\n· ${cost:.4f} (Sonnet, {claude_response.num_turns} turns)"
+        model_label = "Haiku" if swapped_model else "Sonnet"
+        cost_suffix = (
+            f"\n\n· ${cost:.4f} ({model_label}, {claude_response.num_turns} turns)"
+        )
     body = content + cost_suffix
     if len(body) > 3500:
         body = body[:3500] + "…"
