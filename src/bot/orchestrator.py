@@ -1149,6 +1149,17 @@ class MessageOrchestrator:
                     response_content or ""
                 ) + "\n\n_(Interrupted by user)_"
 
+            # Append per-action cost so Гена sees the price of every Sonnet/Opus
+            # turn alongside the cheap router rows. Hidden when cost is 0
+            # (cached / no API call) to avoid clutter.
+            cost = getattr(claude_response, "cost", 0.0) or 0.0
+            if cost > 0:
+                model_label = "Opus 4.6" if opus_swapped else "Sonnet 4.6"
+                response_content = (response_content or "") + (
+                    f"\n\n· ${cost:.4f} ({model_label}, "
+                    f"{claude_response.num_turns} turns)"
+                )
+
             formatted_messages = formatter.format_claude_response(response_content)
 
         except Exception as e:
@@ -1491,7 +1502,7 @@ class MessageOrchestrator:
     async def agentic_voice(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Transcribe voice message -> Claude, minimal chrome."""
+        """Transcribe voice message -> router (writable categories) or Claude."""
         user_id = update.effective_user.id
 
         features = context.bot_data.get("features")
@@ -1510,6 +1521,63 @@ class MessageOrchestrator:
             processed_voice = await voice_handler.process_voice_message(
                 voice, update.message.caption
             )
+            transcript = processed_voice.transcription
+
+            # Voice → router pipeline: feed the clean transcript through the
+            # GenaOS classifier so an "идея ..." spoken into the mic ends up in
+            # parking_lot the same way as a typed message. Only fall through to
+            # Sonnet for question / mixed / api_error.
+            if (
+                self.settings.router_enabled
+                and transcript
+                and not transcript.startswith("??")
+            ):
+                try:
+                    from datetime import UTC, datetime as _dt
+                    from inbox_router import process as router_process  # type: ignore[import-not-found]
+
+                    result = router_process(
+                        text=transcript,
+                        user_id=user_id,
+                        message_id=update.message.message_id,
+                        chat_id=chat.id,
+                        ts=_dt.now(UTC),
+                    )
+                    logger.info(
+                        "voice → router decision",
+                        category=result.category,
+                        passed_through=result.passed_through,
+                        target=result.target_file,
+                    )
+
+                    if result.transparency_reply:
+                        # Prepend the mic emoji so the user sees the route was
+                        # triggered by their voice message.
+                        reply_text = f"🎤 {result.transparency_reply}"
+                        kwargs: Dict[str, Any] = {}
+                        if result.keyboard_payload:
+                            from .middleware.router import _build_keyboard
+                            kwargs["reply_markup"] = _build_keyboard(
+                                result.keyboard_payload
+                            )
+                        try:
+                            await progress_msg.edit_text(reply_text, **kwargs)
+                        except Exception:
+                            await update.message.reply_text(reply_text, **kwargs)
+
+                    if result.cost_alert:
+                        try:
+                            await update.message.reply_text(result.cost_alert)
+                        except Exception:
+                            logger.debug("voice cost alert send failed")
+
+                    if not result.passed_through:
+                        # Router fully handled the voice message. Done.
+                        return
+                except Exception:
+                    logger.exception(
+                        "voice → router crashed, falling through to Sonnet"
+                    )
 
             await progress_msg.edit_text("Working...")
             await self._handle_agentic_media_message(
