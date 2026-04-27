@@ -1454,7 +1454,7 @@ class MessageOrchestrator:
     async def agentic_photo(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        """Process photo -> Claude, minimal chrome."""
+        """Photo → router (caption-driven) or OCR (no caption) → router or Claude."""
         user_id = update.effective_user.id
 
         features = context.bot_data.get("features")
@@ -1474,13 +1474,93 @@ class MessageOrchestrator:
                 photo, update.message.caption
             )
             fmt = processed_image.metadata.get("format", "png")
-            images = [
-                {
-                    "data": processed_image.base64_data,
-                    "media_type": _MEDIA_TYPE_MAP.get(fmt, "image/png"),
-                }
-            ]
+            media_type = _MEDIA_TYPE_MAP.get(fmt, "image/png")
+            images = [{"data": processed_image.base64_data, "media_type": media_type}]
 
+            caption = (update.message.caption or "").strip()
+
+            # Photo → router pipeline. Two branches:
+            #  - caption present → caption is the categorisation signal (cheap,
+            #    no OCR call). Image referenced as context in the file row.
+            #  - no caption → run a Haiku-vision OCR pass to extract visible
+            #    text / one-line description, then route that.
+            # `??` prefix in caption still bypasses router → Sonnet+Opus path.
+            if (
+                self.settings.router_enabled
+                and not caption.startswith("??")
+            ):
+                try:
+                    from datetime import UTC, datetime as _dt
+                    from inbox_router import (  # type: ignore[import-not-found]
+                        process as router_process,
+                        ocr_image,
+                        log_cost,
+                        HAIKU_MODEL,
+                    )
+
+                    if caption:
+                        router_text = caption
+                        ocr_in_tokens = ocr_out_tokens = 0
+                        ocr_used = False
+                    else:
+                        await progress_msg.edit_text("📷 OCR…")
+                        ocr_text, ocr_in_tokens, ocr_out_tokens = ocr_image(
+                            processed_image.base64_data, media_type,
+                        )
+                        router_text = ocr_text
+                        ocr_used = True
+
+                    # Log the OCR Haiku call so it shows up in state/costs/<today>.md
+                    if ocr_used:
+                        log_cost(
+                            model=HAIKU_MODEL, kind="photo_ocr",
+                            input_tokens=ocr_in_tokens, output_tokens=ocr_out_tokens,
+                            message_id=update.message.message_id, ts=_dt.now(UTC),
+                        )
+
+                    if router_text:
+                        result = router_process(
+                            text=router_text,
+                            user_id=user_id,
+                            message_id=update.message.message_id,
+                            chat_id=chat.id,
+                            ts=_dt.now(UTC),
+                        )
+                        logger.info(
+                            "photo → router decision",
+                            category=result.category,
+                            passed_through=result.passed_through,
+                            target=result.target_file,
+                            ocr_used=ocr_used,
+                        )
+
+                        if result.transparency_reply:
+                            reply_text = f"📷 {result.transparency_reply}"
+                            kwargs: Dict[str, Any] = {}
+                            if result.keyboard_payload:
+                                from .middleware.router import _build_keyboard
+                                kwargs["reply_markup"] = _build_keyboard(
+                                    result.keyboard_payload
+                                )
+                            try:
+                                await progress_msg.edit_text(reply_text, **kwargs)
+                            except Exception:
+                                await update.message.reply_text(reply_text, **kwargs)
+
+                        if result.cost_alert:
+                            try:
+                                await update.message.reply_text(result.cost_alert)
+                            except Exception:
+                                pass
+
+                        if not result.passed_through:
+                            return  # Router handled it; no Sonnet call needed.
+                except Exception:
+                    logger.exception(
+                        "photo → router crashed; falling through to Sonnet"
+                    )
+
+            await progress_msg.edit_text("Working...")
             await self._handle_agentic_media_message(
                 update=update,
                 context=context,
