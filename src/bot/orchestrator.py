@@ -1073,20 +1073,24 @@ class MessageOrchestrator:
         # Independent typing heartbeat — stays alive even with no stream events
         heartbeat = self._start_typing_heartbeat(chat)
 
-        # `??` prefix → swap claude_model to Opus 4.7 for this single call.
-        # Same monkeypatch+restore pattern as /fix uses for Haiku.
+        # `??` prefix → swap claude_model to Opus for this single call.
+        # NOTE: pinned to claude-opus-4-1, NOT 4.7. The bundled claude-agent-sdk
+        # ships an older `thinking.type.enabled` request shape; Opus 4.7 only
+        # accepts the new `thinking.type.adaptive` + `output_config.effort`
+        # shape and rejects the old one with HTTP 400. Until the SDK is
+        # upgraded, 4.1 is the strongest Opus that still works through it.
         opus_swapped = False
         opus_saved_model: Any = None
         opus_config = getattr(claude_integration, "config", None)
         if use_opus and opus_config is not None and hasattr(opus_config, "claude_model"):
             opus_saved_model = opus_config.claude_model
             try:
-                opus_config.claude_model = "claude-opus-4-7"
+                opus_config.claude_model = "claude-opus-4-1"
                 opus_swapped = True
                 # Notify the user upfront — Opus is slower and more expensive.
                 try:
                     await progress_msg.edit_text(
-                        "🧠 Opus 4.7…", reply_markup=stop_kb
+                        "🧠 Opus 4.1…", reply_markup=stop_kb
                     )
                 except Exception:
                     pass
