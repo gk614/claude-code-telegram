@@ -38,11 +38,12 @@ async def router_middleware(handler: Callable, event: Any, data: Dict[str, Any])
         # Slash commands are handled by their own CommandHandlers; never route.
         return await handler(event, data)
 
-    if msg.text.startswith("??"):
-        # `??` prefix is the user's explicit "skip router, ask Opus" escape
-        # hatch. Do not classify (saves a Haiku call), pass straight to
-        # agentic_text — that handler strips the prefix and switches the
-        # model to Opus for this one call.
+    if msg.text.startswith("??") or msg.text.startswith("?h "):
+        # Two escape hatches that bypass the router and pick a non-default model:
+        #   - `??`  → Opus 4.x (slow + expensive, for hard reasoning)
+        #   - `?h ` → Haiku 4.5 (fast + cheap, for simple lookups)
+        # Both pass straight to agentic_text — that handler strips the prefix
+        # and swaps config.claude_model accordingly.
         return await handler(event, data)
 
     user = event.effective_user

@@ -960,13 +960,17 @@ class MessageOrchestrator:
         user_id = update.effective_user.id
         message_text = update.message.text
 
-        # `??` escape hatch → use Opus 4.7 for this message and skip the
-        # router (the router middleware already lets it through). Strip the
-        # prefix from the prompt actually sent to Claude.
+        # Escape hatches that bypass the router and pick a non-default model:
+        #   - `??`  → Opus (heavy reasoning)
+        #   - `?h ` → Haiku 4.5 (cheap lookups)
         use_opus = False
+        use_haiku = False
         if message_text and message_text.startswith("??"):
             use_opus = True
             message_text = message_text[2:].lstrip()
+        elif message_text and message_text.startswith("?h "):
+            use_haiku = True
+            message_text = message_text[3:].lstrip()
 
         # 30-minute idle TTL → start a fresh Claude session instead of resuming
         # an old one. Without this, an idle conversation keeps growing the
@@ -987,6 +991,7 @@ class MessageOrchestrator:
             user_id=user_id,
             message_length=len(message_text or ""),
             use_opus=use_opus,
+            use_haiku=use_haiku,
             ttl_force_new=ttl_force_new,
         )
 
@@ -1073,29 +1078,34 @@ class MessageOrchestrator:
         # Independent typing heartbeat — stays alive even with no stream events
         heartbeat = self._start_typing_heartbeat(chat)
 
-        # `??` prefix → swap claude_model to Opus for this single call.
-        # NOTE: pinned to claude-opus-4-6, NOT 4.7. The bundled claude-agent-sdk
-        # ships an older `thinking.type.enabled` request shape; Opus 4.7 only
-        # accepts the new `thinking.type.adaptive` + `output_config.effort`
-        # shape and rejects the old one with HTTP 400. Until the SDK is
-        # upgraded, 4.1 is the strongest Opus that still works through it.
+        # Per-call model override. Two prefixes (already stripped earlier):
+        #   - `??`  → Opus  (heavy reasoning, slow, expensive)
+        #   - `?h ` → Haiku (cheap lookups, fast)
+        # Same monkeypatch+restore pattern /fix uses.
+        # NOTE: Opus 4.7 rejects the SDK's old thinking.type.enabled request
+        # shape with HTTP 400; we pin to 4.6 until the SDK is upgraded.
         opus_swapped = False
         opus_saved_model: Any = None
         opus_config = getattr(claude_integration, "config", None)
-        if use_opus and opus_config is not None and hasattr(opus_config, "claude_model"):
+        swap_label = ""
+        if (use_opus or use_haiku) and opus_config is not None and hasattr(opus_config, "claude_model"):
             opus_saved_model = opus_config.claude_model
             try:
-                opus_config.claude_model = "claude-opus-4-6"
+                if use_opus:
+                    opus_config.claude_model = "claude-opus-4-6"
+                    swap_label = "Opus 4.6"
+                else:
+                    opus_config.claude_model = "claude-haiku-4-5-20251001"
+                    swap_label = "Haiku 4.5"
                 opus_swapped = True
-                # Notify the user upfront — Opus is slower and more expensive.
                 try:
                     await progress_msg.edit_text(
-                        "🧠 Opus 4.6…", reply_markup=stop_kb
+                        f"🧠 {swap_label}…", reply_markup=stop_kb
                     )
                 except Exception:
                     pass
             except Exception:
-                logger.exception("?? Opus swap failed — falling back to default model")
+                logger.exception("model swap failed — falling back to default")
 
         success = True
         try:
@@ -1154,7 +1164,7 @@ class MessageOrchestrator:
             # (cached / no API call) to avoid clutter.
             cost = getattr(claude_response, "cost", 0.0) or 0.0
             if cost > 0:
-                model_label = "Opus 4.6" if opus_swapped else "Sonnet 4.6"
+                model_label = swap_label if opus_swapped else "Sonnet 4.6"
                 response_content = (response_content or "") + (
                     f"\n\n· ${cost:.4f} ({model_label}, "
                     f"{claude_response.num_turns} turns)"
