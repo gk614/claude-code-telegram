@@ -329,6 +329,20 @@ class MessageOrchestrator:
             ("repo", self.agentic_repo),
             ("restart", command.restart_command),
         ]
+        if self.settings.router_enabled:
+            from .handlers.router_commands import (
+                handle_fix,
+                handle_move,
+                handle_undo,
+            )
+
+            handlers.extend(
+                [
+                    ("undo", handle_undo),
+                    ("move", handle_move),
+                    ("fix", handle_fix),
+                ]
+            )
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
@@ -399,11 +413,19 @@ class MessageOrchestrator:
         # Inbox-router callbacks (routing_unsure inline keyboard)
         if self.settings.router_enabled:
             from .handlers.router_callback import handle_router_callback
+            from .handlers.router_commands import handle_move_callback
 
             app.add_handler(
                 CallbackQueryHandler(
                     self._inject_deps(handle_router_callback),
                     pattern=r"^router:",
+                )
+            )
+            # Separate pattern for /move keyboard taps
+            app.add_handler(
+                CallbackQueryHandler(
+                    self._inject_deps(handle_move_callback),
+                    pattern=r"^router_move:",
                 )
             )
 
@@ -473,6 +495,14 @@ class MessageOrchestrator:
                 BotCommand("repo", "List repos / switch workspace"),
                 BotCommand("restart", "Restart the bot"),
             ]
+            if self.settings.router_enabled:
+                commands.extend(
+                    [
+                        BotCommand("undo", "Откатить последнюю запись router'а"),
+                        BotCommand("move", "Переместить запись в другую категорию"),
+                        BotCommand("fix", "Поправить запись через Sonnet"),
+                    ]
+                )
             if self.settings.enable_project_threads:
                 commands.append(BotCommand("sync_threads", "Sync project topics"))
             return commands
