@@ -333,12 +333,18 @@ async def handle_fix(
 
     progress: Optional[Any] = await update.message.reply_text("✏️ Sonnet правит запись…")
 
+    # IMPORTANT: force_new=True keeps /fix cheap. Without it, Sonnet auto-resumes
+    # the user's running Telegram session and the entire chat history gets
+    # billed as input on every turn — measured at ~$0.30+ per fix during
+    # smoke testing. With force_new, only the prompt + Read of the target
+    # file go in → typically <$0.02.
     try:
         claude_response = await claude_integration.run_command(
             prompt=prompt,
             working_directory=current_dir,
             user_id=user_id,
-            session_id=session_id,
+            session_id=None,
+            force_new=True,
         )
     except Exception as exc:
         logger.exception("/fix run_command failed", error=str(exc))
@@ -348,15 +354,28 @@ async def handle_fix(
             pass
         return
 
-    if claude_response.session_id:
-        context.user_data["claude_session_id"] = claude_response.session_id
+    # NOTE: deliberately NOT writing claude_response.session_id back to
+    # context.user_data["claude_session_id"] — that's the user's main
+    # conversation session, and we don't want a /fix subroutine to reset it.
+
+    # The target file is now in a state Sonnet rewrote — our recorded
+    # section_lines / row_index may no longer match. Clear the last_action
+    # so /undo correctly says "nothing to undo" instead of silently failing.
+    try:
+        router.clear_last_action(user_id)
+    except Exception:
+        logger.exception("/fix clear_last_action failed (non-fatal)")
 
     content = (claude_response.content or "").strip() or "Готово."
-    # Truncate to fit Telegram message limit
-    if len(content) > 3500:
-        content = content[:3500] + "…"
+    cost_suffix = ""
+    cost = getattr(claude_response, "cost", 0.0) or 0.0
+    if cost > 0:
+        cost_suffix = f"\n\n· ${cost:.4f} (Sonnet, {claude_response.num_turns} turns)"
+    body = content + cost_suffix
+    if len(body) > 3500:
+        body = body[:3500] + "…"
     try:
-        await progress.edit_text(content)
+        await progress.edit_text(body)
     except Exception:
         # Falls back to a fresh reply if edit fails (e.g. message too old)
-        await update.message.reply_text(content)
+        await update.message.reply_text(body)
