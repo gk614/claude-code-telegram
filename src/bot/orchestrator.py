@@ -367,6 +367,30 @@ class MessageOrchestrator:
             if chat:
                 await send_workout_now_command(context.bot, chat.id, repo)
         handlers.append(("workout", _workout_cmd))
+
+        # /plan slash — beautiful daily plan card
+        async def _plan_cmd(update, context, **_kw):
+            from ..bot.features.planning_day import send_plan_card
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                args = (context.args or [])
+                refresh = bool(args and args[0].lower() in ("refresh", "fresh", "sync"))
+                await send_plan_card(context.bot, chat.id, repo, refresh=refresh)
+        handlers.append(("plan", _plan_cmd))
+
+        # /key slash — interactive key task selector
+        async def _key_cmd(update, context, **_kw):
+            from ..bot.features.planning_day import send_key_selector
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_key_selector(context.bot, chat.id, repo)
+        handlers.append(("key", _key_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
@@ -450,6 +474,15 @@ class MessageOrchestrator:
             CallbackQueryHandler(
                 self._inject_deps(handle_am_callback),
                 pattern=r"^am_q\d+:",
+            )
+        )
+
+        # /key task selector callbacks
+        from .features.planning_day import handle_key_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_key_callback),
+                pattern=r"^keypick:",
             )
         )
 
