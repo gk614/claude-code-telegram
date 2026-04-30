@@ -331,10 +331,11 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
 
     if not has_real_data:
         if pm_section_match:
-            # Replace empty stub section content with our data
+            # Replace entire section body (header → next ## or EOF). `\s*` only
+            # matched whitespace and failed when section had an empty bullet template.
             content = re.sub(
-                r"(## PM рефлексия\s*\n)(\s*)(?=\n## |\Z)",
-                lambda m: m.group(1) + "\n" + pm_data_lines + "\n",
+                r"(## PM рефлексия\s*\n).*?(?=\n## |\Z)",
+                lambda m: m.group(1) + "\n" + pm_data_lines,
                 content, count=1, flags=re.DOTALL,
             )
         else:

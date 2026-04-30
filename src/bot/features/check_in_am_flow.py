@@ -234,9 +234,12 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
 
     if not has_real_data:
         if am_section_match:
+            # Replace entire section body (anything between header and next ## or EOF).
+            # `\s*` was buggy — only matched whitespace, failed when section had
+            # an empty bullet template ("- Состояние:" lines).
             content = re.sub(
-                r"(## AM check-in\s*\n)(\s*)(?=\n## |\Z)",
-                lambda m: m.group(1) + "\n" + am_data_lines + "\n",
+                r"(## AM check-in\s*\n).*?(?=\n## |\Z)",
+                lambda m: m.group(1) + "\n" + am_data_lines,
                 content, count=1, flags=re.DOTALL,
             )
         else:
