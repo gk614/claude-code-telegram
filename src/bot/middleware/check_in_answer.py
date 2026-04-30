@@ -306,7 +306,8 @@ async def check_in_answer_middleware(
 
     # Update Habits
     cis = _load_state(repo)
-    routine = cis.get("am_routine_checks", {}) if kind == "am" else cis.get("am_routine_checks", {})
+    # AM uses morning routine checkboxes; PM doesn't have routine — use empty dict.
+    routine = cis.get("am_routine_checks", {}) if kind == "am" else {}
     flags: dict = {}
     if kind == "am":
         flags["am_done"] = True

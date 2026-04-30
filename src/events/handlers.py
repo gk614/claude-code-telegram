@@ -118,6 +118,7 @@ class AgentHandler:
             'genaos:plan_week_trigger', 'genaos:weekly_review_trigger',
             'genaos:practice_morning', 'genaos:practice_afternoon', 'genaos:practice_evening',
             'genaos:food_evening_alert', 'genaos:waist_weekly', 'genaos:measurements_monthly',
+            'genaos:heartbeat',  # short-circuit if enabled:false in yaml — saves $28/mo Sonnet wakes
         ):
             await self._send_structured_check_in(event)
             return
@@ -228,6 +229,18 @@ class AgentHandler:
                     await send_waist_prompt(bot, chat_id, repo)
                 elif event.job_name == "genaos:measurements_monthly":
                     await send_full_measurements_prompt(bot, chat_id, repo)
+                elif event.job_name == "genaos:heartbeat":
+                    # Read yaml — if disabled, no-op (saves Sonnet wake)
+                    import yaml as _yaml
+                    cfg_path = repo / "state" / "protocols" / "check_ins.yaml"
+                    if cfg_path.exists():
+                        try:
+                            cfg = _yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+                            if not (cfg.get("heartbeat") or {}).get("enabled", False):
+                                return  # short-circuit
+                        except Exception:
+                            return
+                    # Future: heartbeat prompt logic here
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

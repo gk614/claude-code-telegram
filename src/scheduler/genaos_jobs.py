@@ -156,7 +156,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "food_evening_alert",
-        "cron": "0 13 * * *",  # 13:00 UTC = 21:00 CST — same time as non_negotiables but separate
+        "cron": "10 13 * * *",  # 13:10 UTC = 21:10 CST — separated from non_negotiables (13:00) and never_miss_twice (13:05)
         "prompt": (
             "food_evening_alert — handled by events/handlers.py (food_alerts.send_food_evening_alert). "
             "Checks today's food/<today>.md vs nutrition_plan.md goals."

@@ -93,7 +93,10 @@ def aggregate(repo: Path, today: Optional[date] = None) -> dict:
             state_track["am_done"] += 1
         if "## PM рефлексия" in ep and len(ep.split("## PM рефлексия")[-1].split("##")[0].strip()) > 5:
             state_track["pm_done"] += 1
-        m = re.search(r"[Сс]остояние.{0,30}(\d{1,2})", ep)
+        # Match formats: "- Утро (1–10): 7", "Состояние: 7", "Утро 7"
+        m = re.search(r"-\s*Утро\s*\([^)]*\):\s*(\d{1,2})", ep)
+        if not m:
+            m = re.search(r"[Сс]остояние:?\s*(\d{1,2})\b(?!\s*[-–])", ep)
         if m:
             try:
                 v = int(m.group(1))
