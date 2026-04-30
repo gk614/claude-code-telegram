@@ -22,6 +22,7 @@ from ..bot.features.habit_check import (
 )
 from ..bot.features.workout_tracker import send_workout_today
 from ..bot.features.reward_gate import send_first_gate, send_final_gate
+from ..bot.features.planning_week import send_step0 as send_plan_week_start
 
 logger = structlog.get_logger()
 
@@ -108,6 +109,7 @@ class AgentHandler:
             'genaos:task_review_pre_pm', 'genaos:workout_today',
             'genaos:non_negotiables_monitor', 'genaos:never_miss_twice', 'genaos:streaks_post_pm',
             'genaos:reward_gate_first', 'genaos:reward_gate_final',
+            'genaos:plan_week_trigger',
         ):
             await self._send_structured_check_in(event)
             return
@@ -202,6 +204,8 @@ class AgentHandler:
                     await send_first_gate(bot, chat_id, repo)
                 elif event.job_name == "genaos:reward_gate_final":
                     await send_final_gate(bot, chat_id, repo)
+                elif event.job_name == "genaos:plan_week_trigger":
+                    await send_plan_week_start(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

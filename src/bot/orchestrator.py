@@ -402,6 +402,17 @@ class MessageOrchestrator:
             if chat:
                 await send_gate_command(context.bot, chat.id, repo)
         handlers.append(("gate", _gate_cmd))
+
+        # /plan_week slash — start week planning anytime
+        async def _plan_week_cmd(update, context, **_kw):
+            from ..bot.features.planning_week import send_step0
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_step0(context.bot, chat.id, repo)
+        handlers.append(("plan_week", _plan_week_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
@@ -494,6 +505,15 @@ class MessageOrchestrator:
             CallbackQueryHandler(
                 self._inject_deps(handle_key_callback),
                 pattern=r"^keypick:",
+            )
+        )
+
+        # planning-week callbacks (4-step flow)
+        from .features.planning_week import handle_pw_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_pw_callback),
+                pattern=r"^pw_(step|slots|prac):",
             )
         )
 

@@ -52,11 +52,19 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "weekly_review_trigger",
-        "cron": "0 18 * * 0",
+        "cron": "0 10 * * 0",  # 10:00 UTC = 18:00 CST вс
         "prompt": (
             "Воскресенье 18:00 — время Weekly Review. "
             "Прочитай state/protocols/check_ins.yaml → `weekly_review.trigger_message` "
             "и пришли его Гене как короткое предложение начать review."
+        ),
+    },
+    {
+        "slot": "plan_week_trigger",
+        "cron": "0 11 * * 0",  # 11:00 UTC = 19:00 CST вс — после weekly review
+        "prompt": (
+            "plan_week — обрабатывается напрямую через events/handlers.py "
+            "(planning_week.send_step0, deterministic Python)."
         ),
     },
     {

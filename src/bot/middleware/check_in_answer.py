@@ -242,6 +242,13 @@ async def check_in_answer_middleware(
                 consumed = await handle_am_text_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
+
+            pw_active = cis_state.get("plan_week_active_step")
+            if pw_active in ("1_custom", "3", "4"):
+                from ..features.planning_week import handle_pw_text_reply
+                consumed = await handle_pw_text_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
         except ApplicationHandlerStop:
             raise
         except Exception:
