@@ -24,6 +24,9 @@ from ..bot.features.workout_tracker import send_workout_today
 from ..bot.features.reward_gate import send_first_gate, send_final_gate
 from ..bot.features.planning_week import send_step0 as send_plan_week_start
 from ..bot.features.weekly_review import send_aggregate as send_weekly_review
+from ..bot.features.presence_practices import (
+    send_morning_practice, send_afternoon_practice, send_evening_practice,
+)
 
 logger = structlog.get_logger()
 
@@ -111,6 +114,7 @@ class AgentHandler:
             'genaos:non_negotiables_monitor', 'genaos:never_miss_twice', 'genaos:streaks_post_pm',
             'genaos:reward_gate_first', 'genaos:reward_gate_final',
             'genaos:plan_week_trigger', 'genaos:weekly_review_trigger',
+            'genaos:practice_morning', 'genaos:practice_afternoon', 'genaos:practice_evening',
         ):
             await self._send_structured_check_in(event)
             return
@@ -209,6 +213,12 @@ class AgentHandler:
                     await send_plan_week_start(bot, chat_id, repo)
                 elif event.job_name == "genaos:weekly_review_trigger":
                     await send_weekly_review(bot, chat_id, repo)
+                elif event.job_name == "genaos:practice_morning":
+                    await send_morning_practice(bot, chat_id, repo)
+                elif event.job_name == "genaos:practice_afternoon":
+                    await send_afternoon_practice(bot, chat_id, repo)
+                elif event.job_name == "genaos:practice_evening":
+                    await send_evening_practice(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

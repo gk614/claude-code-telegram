@@ -424,6 +424,19 @@ class MessageOrchestrator:
             if chat:
                 await send_aggregate(context.bot, chat.id, repo)
         handlers.append(("weekly", _weekly_cmd))
+
+        # /practice slash — show today's practices or specific by name
+        async def _practice_cmd(update, context, **_kw):
+            from ..bot.features.presence_practices import send_practice_show
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                args = context.args or []
+                name = args[0] if args else None
+                await send_practice_show(context.bot, chat.id, repo, name=name)
+        handlers.append(("practice", _practice_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
@@ -534,6 +547,15 @@ class MessageOrchestrator:
             CallbackQueryHandler(
                 self._inject_deps(handle_wr_callback),
                 pattern=r"^wr_step:",
+            )
+        )
+
+        # practice rating callbacks
+        from .features.presence_practices import handle_practice_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_practice_callback),
+                pattern=r"^prac_rate:",
             )
         )
 

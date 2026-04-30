@@ -134,6 +134,27 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "practice_morning",
+        "cron": "0 23 * * *",  # 23:00 UTC = 07:00 CST — утренняя практика
+        "prompt": (
+            "practice_morning — handled by events/handlers.py (presence_practices.send_morning_practice)."
+        ),
+    },
+    {
+        "slot": "practice_afternoon",
+        "cron": "0 6 * * *",  # 06:00 UTC = 14:00 CST — afternoon dip
+        "prompt": (
+            "practice_afternoon — handled by events/handlers.py (presence_practices.send_afternoon_practice)."
+        ),
+    },
+    {
+        "slot": "practice_evening",
+        "cron": "0 14 * * *",  # 14:00 UTC = 22:00 CST — pre-sleep (before PM at 22:00)
+        "prompt": (
+            "practice_evening — handled by events/handlers.py (presence_practices.send_evening_practice)."
+        ),
+    },
+    {
         "slot": "whoop_age_weekly",
         "cron": "30 1 * * 0",
         "prompt": (
