@@ -326,7 +326,8 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
     # an empty `## PM рефлексия` stub. Old check `if "## PM рефлексия" not in content`
     # was always False → silent-skip data loss. Now: check for actual data marker.
     pm_section_match = re.search(r"## PM рефлексия\s*\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
-    has_real_data = bool(pm_section_match and re.search(r"- (План|Состояние|Истощало|Завтра|Задач):\s*\S", pm_section_match.group(1)))
+    # Match only same-line content (between `:` and `\n`).
+    has_real_data = bool(pm_section_match and re.search(r"- (План|Состояние|Истощало|Завтра|Задач):[ \t]+\S", pm_section_match.group(1)))
 
     if not has_real_data:
         if pm_section_match:

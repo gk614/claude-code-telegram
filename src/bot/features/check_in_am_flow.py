@@ -228,7 +228,9 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
 
     # B-P0-2 fix: same as PM — middleware pre-creates empty stub.
     am_section_match = re.search(r"## AM check-in\s*\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
-    has_real_data = bool(am_section_match and re.search(r"- (Утренняя рутина|Вес|Состояние|Сон|3 главных|Время с близкими):\s*\S", am_section_match.group(1)))
+    # Match only same-line content (between `:` and `\n`). `\s*\S` was buggy — it
+    # matched the next field's bullet on a fresh template and returned False positives.
+    has_real_data = bool(am_section_match and re.search(r"- (Утренняя рутина|Вес|Состояние|Сон|3 главных|Время с близкими):[ \t]+\S", am_section_match.group(1)))
 
     if not has_real_data:
         if am_section_match:
