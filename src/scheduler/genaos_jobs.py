@@ -70,24 +70,26 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "non_negotiables_monitor",
-        "cron": "0 21 * * *",
+        "cron": "0 13 * * *",  # 13:00 UTC = 21:00 CST
         "prompt": (
-            "21:00 проверка non-negotiables за сегодня. "
-            "Прочитай state/protocols/check_ins.yaml → `non_negotiables_monitor.checks`. "
-            "Открой tracks/state/episodic/<today>.md и проверь по чекбоксам какие "
-            "non-negotiables не отмечены. Если есть пропущенные — отправь Гене "
-            "`alert_template` с подставленными названиями. Если всё ОК — ничего не шли."
+            "non_negotiables_monitor — обрабатывается напрямую через events/handlers.py "
+            "(habit_check.send_non_negotiables_alert, deterministic Python, no LLM)."
         ),
     },
     {
         "slot": "never_miss_twice",
-        "cron": "5 21 * * *",
+        "cron": "5 13 * * *",  # 13:05 UTC = 21:05 CST
         "prompt": (
-            "Never-miss-twice detector. Для каждого non-negotiable из "
-            "`non_negotiables_monitor.checks` посмотри tracks/state/episodic/ "
-            "за сегодня и вчера. Если habit пропущен 2+ дня подряд — отправь "
-            "Гене `never_miss_twice.alert_template` с подставленным именем "
-            "habit'а. Иначе ничего не шли."
+            "never_miss_twice — обрабатывается напрямую через events/handlers.py "
+            "(habit_check.send_never_miss_twice_alert, deterministic Python, no LLM)."
+        ),
+    },
+    {
+        "slot": "streaks_post_pm",
+        "cron": "30 15 * * *",  # 15:30 UTC = 23:30 CST — после PM в 22:00
+        "prompt": (
+            "streaks_post_pm — обрабатывается напрямую через events/handlers.py "
+            "(habit_check.update_streaks_after_pm, celebration only)."
         ),
     },
     {

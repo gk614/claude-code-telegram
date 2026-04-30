@@ -345,6 +345,17 @@ class MessageOrchestrator:
                     ("cost", handle_cost),
                 ]
             )
+
+        # /streaks slash command — habit-check streak summary
+        async def _streaks_cmd(update, context, **_kw):
+            from ..bot.features.habit_check import send_streaks_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_streaks_command(context.bot, chat.id, repo)
+        handlers.append(("streaks", _streaks_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
