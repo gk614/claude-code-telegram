@@ -413,6 +413,17 @@ class MessageOrchestrator:
             if chat:
                 await send_step0(context.bot, chat.id, repo)
         handlers.append(("plan_week", _plan_week_cmd))
+
+        # /weekly slash — weekly review anytime
+        async def _weekly_cmd(update, context, **_kw):
+            from ..bot.features.weekly_review import send_aggregate
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_aggregate(context.bot, chat.id, repo)
+        handlers.append(("weekly", _weekly_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
@@ -514,6 +525,15 @@ class MessageOrchestrator:
             CallbackQueryHandler(
                 self._inject_deps(handle_pw_callback),
                 pattern=r"^pw_(step|slots|prac):",
+            )
+        )
+
+        # weekly-review callbacks
+        from .features.weekly_review import handle_wr_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_wr_callback),
+                pattern=r"^wr_step:",
             )
         )
 

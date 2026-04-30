@@ -249,6 +249,12 @@ async def check_in_answer_middleware(
                 consumed = await handle_pw_text_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
+
+            if cis_state.get("weekly_review_active"):
+                from ..features.weekly_review import handle_wr_text_reply
+                consumed = await handle_wr_text_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
         except ApplicationHandlerStop:
             raise
         except Exception:

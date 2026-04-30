@@ -54,9 +54,9 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         "slot": "weekly_review_trigger",
         "cron": "0 10 * * 0",  # 10:00 UTC = 18:00 CST вс
         "prompt": (
-            "Воскресенье 18:00 — время Weekly Review. "
-            "Прочитай state/protocols/check_ins.yaml → `weekly_review.trigger_message` "
-            "и пришли его Гене как короткое предложение начать review."
+            "weekly_review — обрабатывается напрямую через events/handlers.py "
+            "(weekly_review.send_aggregate, deterministic Python aggregate of all "
+            "tracks for past 7 days + interactive 5-question reflection)."
         ),
     },
     {
