@@ -228,7 +228,7 @@ async def send_pm_q4(bot: Any, chat_id: int, repo: Path) -> None:
     text = (
         "🌙 *PM 4/5*\n\n"
         "Завтра по плану недели:\n"
-        "  • _(weekly_plan ещё не настроен)_\n"
+        "  • (weekly\\_plan ещё не настроен)\n"
         "  • План тренировки придёт в 07:30\n"
         "  • AM check-in 09:00\n\n"
         "ОК идём по плану?"
