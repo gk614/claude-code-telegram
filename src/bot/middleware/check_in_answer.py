@@ -255,6 +255,12 @@ async def check_in_answer_middleware(
                 consumed = await handle_wr_text_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
+
+            if cis_state.get("measurement_active"):
+                from ..features.body_measurements import handle_measurement_reply
+                consumed = await handle_measurement_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
         except ApplicationHandlerStop:
             raise
         except Exception:

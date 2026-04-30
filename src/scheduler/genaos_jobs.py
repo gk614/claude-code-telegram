@@ -155,6 +155,28 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "food_evening_alert",
+        "cron": "0 13 * * *",  # 13:00 UTC = 21:00 CST — same time as non_negotiables but separate
+        "prompt": (
+            "food_evening_alert — handled by events/handlers.py (food_alerts.send_food_evening_alert). "
+            "Checks today's food/<today>.md vs nutrition_plan.md goals."
+        ),
+    },
+    {
+        "slot": "waist_weekly",
+        "cron": "0 1 * * 0",  # 01:00 UTC Sunday = 09:00 CST
+        "prompt": (
+            "waist_weekly — handled by events/handlers.py (body_measurements.send_waist_prompt)."
+        ),
+    },
+    {
+        "slot": "measurements_monthly",
+        "cron": "0 1 1 * *",  # 01:00 UTC 1st of month = 09:00 CST
+        "prompt": (
+            "measurements_monthly — handled by events/handlers.py (body_measurements.send_full_measurements_prompt)."
+        ),
+    },
+    {
         "slot": "whoop_age_weekly",
         "cron": "30 1 * * 0",
         "prompt": (

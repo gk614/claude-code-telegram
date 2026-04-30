@@ -27,6 +27,8 @@ from ..bot.features.weekly_review import send_aggregate as send_weekly_review
 from ..bot.features.presence_practices import (
     send_morning_practice, send_afternoon_practice, send_evening_practice,
 )
+from ..bot.features.food_alerts import send_food_evening_alert
+from ..bot.features.body_measurements import send_waist_prompt, send_full_measurements_prompt
 
 logger = structlog.get_logger()
 
@@ -115,6 +117,7 @@ class AgentHandler:
             'genaos:reward_gate_first', 'genaos:reward_gate_final',
             'genaos:plan_week_trigger', 'genaos:weekly_review_trigger',
             'genaos:practice_morning', 'genaos:practice_afternoon', 'genaos:practice_evening',
+            'genaos:food_evening_alert', 'genaos:waist_weekly', 'genaos:measurements_monthly',
         ):
             await self._send_structured_check_in(event)
             return
@@ -219,6 +222,12 @@ class AgentHandler:
                     await send_afternoon_practice(bot, chat_id, repo)
                 elif event.job_name == "genaos:practice_evening":
                     await send_evening_practice(bot, chat_id, repo)
+                elif event.job_name == "genaos:food_evening_alert":
+                    await send_food_evening_alert(bot, chat_id, repo)
+                elif event.job_name == "genaos:waist_weekly":
+                    await send_waist_prompt(bot, chat_id, repo)
+                elif event.job_name == "genaos:measurements_monthly":
+                    await send_full_measurements_prompt(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

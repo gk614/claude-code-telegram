@@ -437,6 +437,40 @@ class MessageOrchestrator:
                 name = args[0] if args else None
                 await send_practice_show(context.bot, chat.id, repo, name=name)
         handlers.append(("practice", _practice_cmd))
+
+        # /parking slash — list/show/kill/promote ideas
+        async def _parking_cmd(update, context, **_kw):
+            from ..bot.features.parking_lot_cmds import handle_parking_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                args = context.args or []
+                await handle_parking_command(context.bot, chat.id, repo, args)
+        handlers.append(("parking", _parking_cmd))
+
+        # /waist slash — записать талию вручную
+        async def _waist_cmd(update, context, **_kw):
+            from ..bot.features.body_measurements import send_waist_prompt
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_waist_prompt(context.bot, chat.id, repo)
+        handlers.append(("waist", _waist_cmd))
+
+        # /measure slash — записать полные замеры вручную
+        async def _measure_cmd(update, context, **_kw):
+            from ..bot.features.body_measurements import send_full_measurements_prompt
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_full_measurements_prompt(context.bot, chat.id, repo)
+        handlers.append(("measure", _measure_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 
