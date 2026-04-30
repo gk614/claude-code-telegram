@@ -205,7 +205,7 @@ async def handle_pm_text_reply(
         return False
 
     answers = state.setdefault("pm_answers", {})
-    bot = msg.bot
+    bot = msg.get_bot()
     chat_id = msg.chat_id
     text = msg.text.strip()
 

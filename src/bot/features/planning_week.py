@@ -420,7 +420,7 @@ async def handle_pw_text_reply(update_or_event: Any, context: Any = None, settin
 
     data = state.setdefault("plan_week_data", {})
     text = msg.text.strip()
-    bot = msg.bot
+    bot = msg.get_bot()
     chat_id = msg.chat_id
 
     if active == "1_custom":

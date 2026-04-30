@@ -380,7 +380,7 @@ async def handle_wr_text_reply(update_or_event: Any, context: Any = None, settin
 
     await msg.reply_text("📝 Записано")
     next_idx = idx + 1
-    bot = msg.bot
+    bot = msg.get_bot()
     chat_id = msg.chat_id
     if next_idx >= len(REFLECTION_QUESTIONS):
         await send_done(bot, chat_id, repo)
