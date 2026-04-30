@@ -391,6 +391,17 @@ class MessageOrchestrator:
             if chat:
                 await send_key_selector(context.bot, chat.id, repo)
         handlers.append(("key", _key_cmd))
+
+        # /gate slash — reward-gate status anytime
+        async def _gate_cmd(update, context, **_kw):
+            from ..bot.features.reward_gate import send_gate_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_gate_command(context.bot, chat.id, repo)
+        handlers.append(("gate", _gate_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 

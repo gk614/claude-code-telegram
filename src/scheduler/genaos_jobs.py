@@ -110,6 +110,22 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "reward_gate_first",
+        "cron": "30 14 * * *",  # 14:30 UTC = 22:30 CST — за 30 мин до final gate
+        "prompt": (
+            "reward_gate first — обрабатывается напрямую через events/handlers.py "
+            "(reward_gate.send_first_gate, deterministic Python)."
+        ),
+    },
+    {
+        "slot": "reward_gate_final",
+        "cron": "0 15 * * *",  # 15:00 UTC = 23:00 CST — финал accountability
+        "prompt": (
+            "reward_gate final — обрабатывается напрямую через events/handlers.py "
+            "(reward_gate.send_final_gate, deterministic Python)."
+        ),
+    },
+    {
         "slot": "whoop_age_weekly",
         "cron": "30 1 * * 0",
         "prompt": (
