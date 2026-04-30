@@ -37,19 +37,15 @@ def _state_path(repo: Path) -> Path:
 
 
 def _load_state(repo: Path) -> dict:
-    f = _state_path(repo)
-    if f.exists():
-        try:
-            return json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
+    from . import _state_io
+    return _state_io.load_state(repo)
+
 
 
 def _save_state(repo: Path, state: dict) -> None:
-    f = _state_path(repo)
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    from . import _state_io
+    _state_io.save_state(repo, state)
+
 
 
 def _today_episodic_key_tasks(repo: Path) -> list[str]:
@@ -317,17 +313,35 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
     else:
         content = f"---\ndate: {today}\ntype: daily\n---\n\n# {today}\n\n"
 
-    pm_block = (
-        f"\n## PM рефлексия\n\n"
+    pm_data_lines = (
         f"- План: {plan_done}\n"
         f"- Состояние: {state_now}/10\n"
         f"- Истощало/энергия: {energy}\n"
         f"- Завтра ack: {tomorrow_ack}\n"
         f"- Задач на завтра: {tasks_count}\n"
     )
-    if "## PM рефлексия" not in content:
-        content = content.rstrip("\n") + "\n" + pm_block
+    pm_block = f"\n## PM рефлексия\n\n{pm_data_lines}"
+
+    # B-P0-2 fix: middleware (check_in_answer._ensure_episodic) pre-creates
+    # an empty `## PM рефлексия` stub. Old check `if "## PM рефлексия" not in content`
+    # was always False → silent-skip data loss. Now: check for actual data marker.
+    pm_section_match = re.search(r"## PM рефлексия\s*\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+    has_real_data = bool(pm_section_match and re.search(r"- (План|Состояние|Истощало|Завтра|Задач):\s*\S", pm_section_match.group(1)))
+
+    if not has_real_data:
+        if pm_section_match:
+            # Replace empty stub section content with our data
+            content = re.sub(
+                r"(## PM рефлексия\s*\n)(\s*)(?=\n## |\Z)",
+                lambda m: m.group(1) + "\n" + pm_data_lines + "\n",
+                content, count=1, flags=re.DOTALL,
+            )
+        else:
+            content = content.rstrip("\n") + "\n" + pm_block
         episodic.write_text(content, encoding="utf-8")
+        logger.info("PM reflection written to episodic", date=today)
+    else:
+        logger.warning("PM reflection skipped — section already has data", date=today)
 
     await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
     logger.info("PM done", chat_id=chat_id, answers=answers)

@@ -4,8 +4,14 @@ Wraps APScheduler's AsyncIOScheduler and publishes ScheduledEvents
 to the event bus when jobs fire.
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+try:
+    from zoneinfo import ZoneInfo  # py3.9+
+except ImportError:
+    from backports.zoneinfo import ZoneInfo  # type: ignore
 
 import structlog
 from apscheduler.schedulers.asyncio import (
@@ -18,6 +24,11 @@ from ..events.types import ScheduledEvent
 from ..storage.database import DatabaseManager
 
 logger = structlog.get_logger()
+
+# B-P0-1 fix: explicit scheduler timezone matches yaml comments (CST = Asia/Shanghai).
+# Otherwise APScheduler uses tzlocal() — on VPS under TZ=UTC, all "0 8 * * *  # 09:00 CST"
+# crons would fire 8 hours late.
+GENAOS_SCHEDULER_TZ = os.environ.get("GENAOS_SCHEDULER_TZ", "Asia/Shanghai")
 
 
 class JobScheduler:
@@ -32,7 +43,13 @@ class JobScheduler:
         self.event_bus = event_bus
         self.db_manager = db_manager
         self.default_working_directory = default_working_directory
-        self._scheduler = AsyncIOScheduler()
+        try:
+            tz = ZoneInfo(GENAOS_SCHEDULER_TZ)
+        except Exception:
+            tz = None
+            logger.warning("scheduler tz fallback to system", tz=GENAOS_SCHEDULER_TZ)
+        self._scheduler = AsyncIOScheduler(timezone=tz) if tz else AsyncIOScheduler()
+        logger.info("scheduler initialized", timezone=str(tz) if tz else "tzlocal()")
 
     async def start(self) -> None:
         """Load persisted jobs and start the scheduler."""

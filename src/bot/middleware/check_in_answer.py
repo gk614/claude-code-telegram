@@ -23,19 +23,13 @@ logger = structlog.get_logger()
 
 
 def _load_state(repo: Path) -> dict:
-    f = repo / "state" / "check_in_state.json"
-    if f.exists():
-        try:
-            return json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {}
+    from ..features import _state_io
+    return _state_io.load_state(repo)
 
 
 def _save_state(repo: Path, state: dict) -> None:
-    f = repo / "state" / "check_in_state.json"
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    from ..features import _state_io
+    _state_io.save_state(repo, state)
 
 
 def _episodic_path(repo: Path) -> Path:

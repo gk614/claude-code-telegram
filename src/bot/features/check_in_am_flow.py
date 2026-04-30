@@ -39,19 +39,14 @@ def _state_path(repo: Path) -> Path:
 
 
 def _load_state(repo: Path) -> dict:
-    f = _state_path(repo)
-    if f.exists():
-        try:
-            return json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
+    from . import _state_io
+    return _state_io.load_state(repo)
+
 
 
 def _save_state(repo: Path, state: dict) -> None:
-    f = _state_path(repo)
-    f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    from . import _state_io
+    _state_io.save_state(repo, state)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -221,8 +216,7 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
     else:
         content = f"---\ndate: {today}\ntype: daily\n---\n\n# {today}\n\n"
 
-    am_block = (
-        f"\n## AM check-in\n\n"
+    am_data_lines = (
         f"- Утренняя рутина: {routine_done}/{routine_total}\n"
         f"- Вес: {weight}\n"
         f"- Состояние: {state_val}/10\n"
@@ -230,9 +224,25 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
         f"- 3 главных дела: {top3}\n"
         f"- Время с близкими: {family}\n"
     )
-    if "## AM check-in" not in content:
-        content = content.rstrip("\n") + "\n" + am_block
+    am_block = f"\n## AM check-in\n\n{am_data_lines}"
+
+    # B-P0-2 fix: same as PM — middleware pre-creates empty stub.
+    am_section_match = re.search(r"## AM check-in\s*\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+    has_real_data = bool(am_section_match and re.search(r"- (Утренняя рутина|Вес|Состояние|Сон|3 главных|Время с близкими):\s*\S", am_section_match.group(1)))
+
+    if not has_real_data:
+        if am_section_match:
+            content = re.sub(
+                r"(## AM check-in\s*\n)(\s*)(?=\n## |\Z)",
+                lambda m: m.group(1) + "\n" + am_data_lines + "\n",
+                content, count=1, flags=re.DOTALL,
+            )
+        else:
+            content = content.rstrip("\n") + "\n" + am_block
         episodic.write_text(content, encoding="utf-8")
+        logger.info("AM check-in written to episodic", date=today)
+    else:
+        logger.warning("AM check-in skipped — section already has data", date=today)
 
     # Persist weight in monthly weights file
     if isinstance(weight, (int, float)) or (isinstance(weight, str) and re.match(r"^\d+(\.\d+)?$", str(weight))):

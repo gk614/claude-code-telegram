@@ -30,7 +30,7 @@ GENAOS_JOB_PREFIX = "genaos:"
 _DEFAULT_JOBS: list[dict[str, Any]] = [
     {
         "slot": "am_check_in",
-        "cron": "0 8 * * *",
+        "cron": "0 9 * * *",  # 09:00 CST — утренний check-in,
         "prompt": (
             "Запусти AM check-in. "
             "Шаг 1: прочитай state/protocols/check_ins.yaml и достань список "
@@ -43,7 +43,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "pm_check_in",
-        "cron": "0 22 * * *",
+        "cron": "0 22 * * *",  # 22:00 CST — вечерний check-in,
         "prompt": (
             "Запусти PM check-in. "
             "Прочитай state/protocols/check_ins.yaml → `pm_check_in.questions`, "
@@ -52,7 +52,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "weekly_review_trigger",
-        "cron": "0 10 * * 0",  # 10:00 UTC = 18:00 CST вс
+        "cron": "0 18 * * 0",  # 18:00 CST вс — Weekly Review,  # 10:00 UTC = 18:00 CST вс
         "prompt": (
             "weekly_review — обрабатывается напрямую через events/handlers.py "
             "(weekly_review.send_aggregate, deterministic Python aggregate of all "
@@ -61,7 +61,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "plan_week_trigger",
-        "cron": "0 11 * * 0",  # 11:00 UTC = 19:00 CST вс — после weekly review
+        "cron": "0 19 * * 0",  # 19:00 CST вс — Plan-week,  # 11:00 UTC = 19:00 CST вс — после weekly review
         "prompt": (
             "plan_week — обрабатывается напрямую через events/handlers.py "
             "(planning_week.send_step0, deterministic Python)."
@@ -69,7 +69,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "heartbeat",
-        "cron": "0 11,14,17,20 * * 1-5",
+        "cron": "0 19,22 * * 1-5",  # 19/22 CST — heartbeat (currently disabled),
         "prompt": (
             "Heartbeat-ping. Прочитай state/protocols/check_ins.yaml → `heartbeat`. "
             "ЕСЛИ `enabled: false` — НЕ отправляй ничего, return без действий. "
@@ -78,7 +78,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "non_negotiables_monitor",
-        "cron": "0 13 * * *",  # 13:00 UTC = 21:00 CST
+        "cron": "0 21 * * *",  # 21:00 CST,  # 13:00 UTC = 21:00 CST
         "prompt": (
             "non_negotiables_monitor — обрабатывается напрямую через events/handlers.py "
             "(habit_check.send_non_negotiables_alert, deterministic Python, no LLM)."
@@ -86,7 +86,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "never_miss_twice",
-        "cron": "5 13 * * *",  # 13:05 UTC = 21:05 CST
+        "cron": "5 21 * * *",  # 21:05 CST,  # 13:05 UTC = 21:05 CST
         "prompt": (
             "never_miss_twice — обрабатывается напрямую через events/handlers.py "
             "(habit_check.send_never_miss_twice_alert, deterministic Python, no LLM)."
@@ -94,7 +94,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "streaks_post_pm",
-        "cron": "30 15 * * *",  # 15:30 UTC = 23:30 CST — после PM в 22:00
+        "cron": "30 23 * * *",  # 23:30 CST — после PM,  # 15:30 UTC = 23:30 CST — после PM в 22:00
         "prompt": (
             "streaks_post_pm — обрабатывается напрямую через events/handlers.py "
             "(habit_check.update_streaks_after_pm, celebration only)."
@@ -102,7 +102,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "task_review_pre_pm",
-        "cron": "30 13 * * *",  # 13:30 UTC = 21:30 CST — за 30 мин до PM на 22:00
+        "cron": "30 21 * * *",  # 21:30 CST — за 30 мин до PM,  # 13:30 UTC = 21:30 CST — за 30 мин до PM на 22:00
         "prompt": (
             "Task review pre-PM. Этот job НЕ обрабатывается через Sonnet — "
             "events/handlers.py перехватывает по job_name='genaos:task_review_pre_pm' "
@@ -111,7 +111,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "workout_today",
-        "cron": "30 23 * * *",  # 23:30 UTC = 07:30 CST — утренний план тренировки
+        "cron": "30 7 * * *",  # 07:30 CST — утренний план тренировки,  # 23:30 UTC = 07:30 CST — утренний план тренировки
         "prompt": (
             "workout-tracker — обрабатывается напрямую через events/handlers.py "
             "(workout_tracker.send_workout_today, deterministic Python, no LLM)."
@@ -119,7 +119,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "reward_gate_first",
-        "cron": "30 14 * * *",  # 14:30 UTC = 22:30 CST — за 30 мин до final gate
+        "cron": "30 22 * * *",  # 22:30 CST — first reward gate,  # 14:30 UTC = 22:30 CST — за 30 мин до final gate
         "prompt": (
             "reward_gate first — обрабатывается напрямую через events/handlers.py "
             "(reward_gate.send_first_gate, deterministic Python)."
@@ -127,7 +127,7 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "reward_gate_final",
-        "cron": "0 15 * * *",  # 15:00 UTC = 23:00 CST — финал accountability
+        "cron": "0 23 * * *",  # 23:00 CST — final reward gate,  # 15:00 UTC = 23:00 CST — финал accountability
         "prompt": (
             "reward_gate final — обрабатывается напрямую через events/handlers.py "
             "(reward_gate.send_final_gate, deterministic Python)."
@@ -135,28 +135,28 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "practice_morning",
-        "cron": "0 23 * * *",  # 23:00 UTC = 07:00 CST — утренняя практика
+        "cron": "0 7 * * *",  # 07:00 CST — утренняя практика,  # 23:00 UTC = 07:00 CST — утренняя практика
         "prompt": (
             "practice_morning — handled by events/handlers.py (presence_practices.send_morning_practice)."
         ),
     },
     {
         "slot": "practice_afternoon",
-        "cron": "0 6 * * *",  # 06:00 UTC = 14:00 CST — afternoon dip
+        "cron": "0 14 * * *",  # 14:00 CST — afternoon dip,  # 06:00 UTC = 14:00 CST — afternoon dip
         "prompt": (
             "practice_afternoon — handled by events/handlers.py (presence_practices.send_afternoon_practice)."
         ),
     },
     {
         "slot": "practice_evening",
-        "cron": "0 14 * * *",  # 14:00 UTC = 22:00 CST — pre-sleep (before PM at 22:00)
+        "cron": "0 22 * * *",  # 22:00 CST — pre-sleep,  # 14:00 UTC = 22:00 CST — pre-sleep (before PM at 22:00)
         "prompt": (
             "practice_evening — handled by events/handlers.py (presence_practices.send_evening_practice)."
         ),
     },
     {
         "slot": "food_evening_alert",
-        "cron": "10 13 * * *",  # 13:10 UTC = 21:10 CST — separated from non_negotiables (13:00) and never_miss_twice (13:05)
+        "cron": "10 21 * * *",  # 21:10 CST,  # 13:10 UTC = 21:10 CST — separated from non_negotiables (13:00) and never_miss_twice (13:05)
         "prompt": (
             "food_evening_alert — handled by events/handlers.py (food_alerts.send_food_evening_alert). "
             "Checks today's food/<today>.md vs nutrition_plan.md goals."
@@ -164,21 +164,21 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "waist_weekly",
-        "cron": "0 1 * * 0",  # 01:00 UTC Sunday = 09:00 CST
+        "cron": "0 9 * * 0",  # 09:00 CST вс,  # 01:00 UTC Sunday = 09:00 CST
         "prompt": (
             "waist_weekly — handled by events/handlers.py (body_measurements.send_waist_prompt)."
         ),
     },
     {
         "slot": "measurements_monthly",
-        "cron": "0 1 1 * *",  # 01:00 UTC 1st of month = 09:00 CST
+        "cron": "0 9 1 * *",  # 09:00 CST 1-го числа,  # 01:00 UTC 1st of month = 09:00 CST
         "prompt": (
             "measurements_monthly — handled by events/handlers.py (body_measurements.send_full_measurements_prompt)."
         ),
     },
     {
         "slot": "whoop_age_weekly",
-        "cron": "30 1 * * 0",
+        "cron": "30 9 * * 0",  # 09:30 CST вс,
         "prompt": (
             "Воскресенье 09:30 локально (CST) — Whoop Healthspan check-in. "
             "Шаг 1: прочитай state/protocols/check_ins.yaml → `whoop_age_weekly.message` "
@@ -212,13 +212,26 @@ async def register_default_jobs(
         logger.exception("Failed to list scheduler jobs; skipping registration")
         return
 
-    existing_names: set[str] = {row.get("job_name", "") for row in existing}
+    # Idempotent re-register: if cron-expression in code changed, update existing job.
+    # B-P0-1 fix follow-up: after switching scheduler timezone to Asia/Shanghai,
+    # cron-strings in this file became local CST and need to be applied to old DB rows.
+    existing_by_name: dict[str, dict] = {row.get("job_name", ""): row for row in existing}
 
     for spec in _DEFAULT_JOBS:
         job_name = f"{GENAOS_JOB_PREFIX}{spec['slot']}"
-        if job_name in existing_names:
-            logger.info("genaos job already registered, skipping", job_name=job_name)
-            continue
+        existing_row = existing_by_name.get(job_name)
+        if existing_row:
+            existing_cron = existing_row.get("cron_expression") or existing_row.get("cron") or ""
+            if existing_cron == spec["cron"]:
+                logger.info("genaos job already registered, skipping", job_name=job_name)
+                continue
+            # Cron changed — remove old, re-add with new cron
+            try:
+                await scheduler.remove_job(job_name)
+                logger.info("genaos cron changed, re-registering",
+                            job_name=job_name, old=existing_cron, new=spec["cron"])
+            except Exception:
+                logger.exception("Failed to remove stale genaos job", job_name=job_name)
         try:
             await scheduler.add_job(
                 job_name=job_name,
