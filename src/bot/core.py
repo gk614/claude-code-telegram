@@ -144,6 +144,7 @@ class ClaudeCodeBot:
     def _add_middleware(self) -> None:
         """Add middleware to application."""
         from .middleware.auth import auth_middleware
+        from .middleware.check_in import check_in_middleware
         from .middleware.rate_limit import rate_limit_middleware
         from .middleware.router import router_middleware
         from .middleware.security import security_middleware
@@ -173,13 +174,23 @@ class ClaudeCodeBot:
             group=-1,
         )
 
-        # Inbox-router (GenaOS pre-filter) — between rate_limit (-1) and
+        # AM/PM check-in capture — must run BEFORE inbox-router so that
+        # replies to daily check-in pings are written to the episodic file
+        # instead of being classified as journal/idea by the router.
+        self.app.add_handler(
+            MessageHandler(
+                filters.ALL, self._create_middleware_handler(check_in_middleware)
+            ),
+            group=0,
+        )
+
+        # Inbox-router (GenaOS pre-filter) — between check_in (0) and
         # message handlers (10). No-op when ROUTER_ENABLED=false.
         self.app.add_handler(
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(router_middleware)
             ),
-            group=0,
+            group=1,
         )
 
         logger.info("Middleware added to bot")
