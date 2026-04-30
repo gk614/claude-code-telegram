@@ -97,7 +97,12 @@ async def send_am_check_in(bot: Any, chat_id: int, repo: Path) -> None:
         state["am_routine_checks"] = {slug: False for slug, _, _ in ROUTINE_ITEMS}
     _save_state(repo, state)
 
-    text = (
+    # Source of truth: state/protocols/check_ins.yaml → am_check_in.message.
+    # The YAML text intentionally omits the routine items (Свет/Движение/
+    # Холод/Медитация) — they appear as the inline keyboard below this text.
+    # Fallback below covers the case where YAML is missing/broken so the
+    # AM ping still goes out.
+    text = (am.get("message") or "").strip() or (
         "*☀️ Утренняя рутина* — нажимай галочки что сделал:\n"
         "_(можно тыкать в любом порядке, можно вернуться позже)_\n\n"
         "*🌅 AM check-in* — ответь реплаем на это сообщение:\n\n"
