@@ -246,7 +246,7 @@ async def send_aggregate(bot: Any, chat_id: int, repo: Path) -> None:
     state.setdefault("weekly_review_answers", {})
     _save_state(repo, state)
 
-    text = summary + "\n_Открой → tracks/state/weekly_summaries/" + data["week_start"] + ".md_\n\nГотов к рефлексии? 5 вопросов, ~5 мин."
+    text = summary + "\nОткрой → `tracks/state/weekly_summaries/" + data["week_start"] + ".md`\n\nГотов к рефлексии? 5 вопросов, ~5 мин."
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("Поехали", callback_data="wr_step:1")],
         [InlineKeyboardButton("Позже", callback_data="wr_step:later")],
