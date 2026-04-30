@@ -422,6 +422,15 @@ class MessageOrchestrator:
             )
         )
 
+        # AM check-in step-by-step callbacks (q1..q5 — after routine done)
+        from .handlers.check_in_am_callback import handle_am_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_am_callback),
+                pattern=r"^am_q\d+:",
+            )
+        )
+
 
         # Only cd: callbacks (for project selection), scoped by pattern
         app.add_handler(

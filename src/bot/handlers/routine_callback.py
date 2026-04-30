@@ -36,6 +36,11 @@ async def handle_am_routine_callback(
     await query.answer()  # acknowledge to remove "loading" spinner
 
     parts = query.data.split(":")
+    # "Готово →" button → start step-by-step continuation
+    if len(parts) == 2 and parts[0] == "am_routine" and parts[1] == "done":
+        from .check_in_am_callback import handle_am_routine_done
+        await handle_am_routine_done(update, context, settings=settings, **_kwargs)
+        return
     if len(parts) != 3 or parts[0] != "am_routine" or parts[1] != "toggle":
         return
     slug = parts[2]

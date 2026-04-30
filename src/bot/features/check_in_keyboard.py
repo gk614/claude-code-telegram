@@ -48,7 +48,7 @@ def _save_state(repo: Path, state: dict) -> None:
 
 
 def build_am_routine_keyboard(checked: dict[str, bool]) -> InlineKeyboardMarkup:
-    """Build 2x2 grid of routine checkboxes."""
+    """Build 2x2 grid of routine checkboxes + Готово → button."""
     rows: List[List[InlineKeyboardButton]] = []
     for i in range(0, len(ROUTINE_ITEMS), 2):
         row = []
@@ -61,6 +61,7 @@ def build_am_routine_keyboard(checked: dict[str, bool]) -> InlineKeyboardMarkup:
                 )
             )
         rows.append(row)
+    rows.append([InlineKeyboardButton("Готово →", callback_data="am_routine:done")])
     return InlineKeyboardMarkup(rows)
 
 
