@@ -14,6 +14,7 @@ patch it via natural language.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Optional
 
 import structlog
