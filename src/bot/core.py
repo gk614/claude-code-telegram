@@ -161,6 +161,7 @@ class ClaudeCodeBot:
         from .middleware.router import router_middleware
         from .middleware.check_in_lock import check_in_lock_middleware
         from .middleware.check_in_answer import check_in_answer_middleware
+        from .middleware.intent_classifier import intent_classifier_middleware
         from .middleware.security import security_middleware
 
         # Middleware runs in order of group numbers (lower = earlier)
@@ -184,6 +185,15 @@ class ClaudeCodeBot:
         self.app.add_handler(
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(rate_limit_middleware)
+            ),
+            group=-1,
+        )
+
+        # Intent classifier (Layer 5/6) — Haiku pre-filter for dangerous patterns.
+        # Closes CLAUDE.md non-negotiable: «Либо все 6 security layers, либо обычный mode».
+        self.app.add_handler(
+            MessageHandler(
+                filters.ALL, self._create_middleware_handler(intent_classifier_middleware)
             ),
             group=-1,
         )
