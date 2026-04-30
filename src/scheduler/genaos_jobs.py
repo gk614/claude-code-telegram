@@ -90,6 +90,22 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
             "habit'а. Иначе ничего не шли."
         ),
     },
+    {
+        "slot": "whoop_age_weekly",
+        "cron": "30 1 * * 0",
+        "prompt": (
+            "Воскресенье 09:30 локально (CST) — Whoop Healthspan check-in. "
+            "Шаг 1: прочитай state/protocols/check_ins.yaml → `whoop_age_weekly.message` "
+            "и пришли его Гене. "
+            "Шаг 2: ничего больше не делай — Гена ответит позже свободным текстом "
+            "(например «32.5 и 0.85»). Когда придёт его ответ, общий agentic-handler "
+            "должен распознать что это reply на Whoop Healthspan ping (по recent context "
+            "или по формату двух чисел) и допиши строку в tracks/body/whoop/healthspan.md "
+            "в формате `- YYYY-MM-DD: Whoop Age <X>, Pace of Aging <Y>` где дата = today UTC+8. "
+            "Подтверди коротко: «Записал — теперь N точек.» Если N >= 3, добавь: "
+            "«Хочешь тренд + рекомендации? Отвечай /healthspan-review»."
+        ),
+    },
 ]
 
 
