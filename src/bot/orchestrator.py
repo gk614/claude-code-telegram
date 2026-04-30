@@ -356,6 +356,17 @@ class MessageOrchestrator:
             if chat:
                 await send_streaks_command(context.bot, chat.id, repo)
         handlers.append(("streaks", _streaks_cmd))
+
+        # /workout slash command — show today's workout plan
+        async def _workout_cmd(update, context, **_kw):
+            from ..bot.features.workout_tracker import send_workout_now_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                await send_workout_now_command(context.bot, chat.id, repo)
+        handlers.append(("workout", _workout_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 

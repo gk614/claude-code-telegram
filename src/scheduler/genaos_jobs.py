@@ -102,6 +102,14 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "workout_today",
+        "cron": "30 23 * * *",  # 23:30 UTC = 07:30 CST — утренний план тренировки
+        "prompt": (
+            "workout-tracker — обрабатывается напрямую через events/handlers.py "
+            "(workout_tracker.send_workout_today, deterministic Python, no LLM)."
+        ),
+    },
+    {
         "slot": "whoop_age_weekly",
         "cron": "30 1 * * 0",
         "prompt": (

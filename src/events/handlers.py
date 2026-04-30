@@ -20,6 +20,7 @@ from ..bot.features.habit_check import (
     send_never_miss_twice_alert,
     update_streaks_after_pm,
 )
+from ..bot.features.workout_tracker import send_workout_today
 
 logger = structlog.get_logger()
 
@@ -103,7 +104,7 @@ class AgentHandler:
         # Intercept structured-message jobs (no Sonnet, direct keyboard send)
         if event.job_name in (
             'genaos:am_check_in', 'genaos:pm_check_in', 'genaos:am_plan_send',
-            'genaos:task_review_pre_pm',
+            'genaos:task_review_pre_pm', 'genaos:workout_today',
             'genaos:non_negotiables_monitor', 'genaos:never_miss_twice', 'genaos:streaks_post_pm',
         ):
             await self._send_structured_check_in(event)
@@ -193,6 +194,8 @@ class AgentHandler:
                     await send_never_miss_twice_alert(bot, chat_id, repo)
                 elif event.job_name == "genaos:streaks_post_pm":
                     await update_streaks_after_pm(bot, chat_id, repo)
+                elif event.job_name == "genaos:workout_today":
+                    await send_workout_today(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 
