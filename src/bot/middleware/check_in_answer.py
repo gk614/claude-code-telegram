@@ -214,6 +214,27 @@ async def check_in_answer_middleware(
     if not text or text.startswith("/"):
         return await handler(event, data)
 
+    settings = data.get("settings")
+    repo_str = getattr(settings, "genaos_repo_path", None) if settings else None
+
+    # ─── EARLY CHECK: PM step-by-step active flow ───
+    # If pm_active_question is set to "3", "5", "1_custom", "4_edit" — handle as PM open answer.
+    if repo_str:
+        try:
+            cis_state = _load_state(Path(str(repo_str)))
+            pm_active = cis_state.get("pm_active_question")
+            if pm_active in ("3", "5", "1_custom", "4_edit"):
+                from ..handlers.check_in_pm_callback import handle_pm_text_reply
+
+                # Build minimal Update wrapper compat
+                consumed = await handle_pm_text_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
+        except ApplicationHandlerStop:
+            raise
+        except Exception:
+            logger.exception("check_in_answer: pm_text_reply early-check failed")
+
     reply = getattr(msg, "reply_to_message", None)
     if reply is None:
         return await handler(event, data)

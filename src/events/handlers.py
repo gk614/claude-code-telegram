@@ -13,6 +13,7 @@ from ..claude.facade import ClaudeIntegration
 from .bus import Event, EventBus
 from .types import AgentResponseEvent, ScheduledEvent, WebhookEvent
 from ..bot.features.check_in_keyboard import send_am_check_in, send_pm_check_in, send_am_plan
+from ..bot.features.check_in_pm_flow import send_pm_q0
 
 logger = structlog.get_logger()
 
@@ -170,7 +171,8 @@ class AgentHandler:
                 if event.job_name == "genaos:am_check_in":
                     await send_am_check_in(bot, chat_id, repo)
                 elif event.job_name == "genaos:pm_check_in":
-                    await send_pm_check_in(bot, chat_id, repo)
+                    # Step-by-step PM flow (v0.2 UX)
+                    await send_pm_q0(bot, chat_id, repo)
                 elif event.job_name == "genaos:am_plan_send":
                     await send_am_plan(bot, chat_id, repo)
             except Exception:

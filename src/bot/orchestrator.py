@@ -413,6 +413,15 @@ class MessageOrchestrator:
             )
         )
 
+        # PM check-in step-by-step callbacks (q0..q5)
+        from .handlers.check_in_pm_callback import handle_pm_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_pm_callback),
+                pattern=r"^pm_q\d+:",
+            )
+        )
+
 
         # Only cd: callbacks (for project selection), scoped by pattern
         app.add_handler(
