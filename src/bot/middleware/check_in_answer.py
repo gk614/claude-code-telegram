@@ -278,6 +278,18 @@ async def check_in_answer_middleware(
     if kind is None:
         return await handler(event, data)
 
+    # Skip middleware double-write if step-by-step PM/AM flow is active.
+    # send_pm_done / send_am_done write to ## PM рефлексия / ## AM check-in themselves.
+    if repo_str:
+        try:
+            cis_state = _load_state(Path(str(repo_str)))
+            if kind == "pm" and cis_state.get("pm_active_question") not in (None, "0"):
+                return await handler(event, data)
+            if kind == "am" and cis_state.get("am_active_question") not in (None, "0"):
+                return await handler(event, data)
+        except Exception:
+            pass
+
     settings = data.get("settings")
     if not settings:
         return await handler(event, data)

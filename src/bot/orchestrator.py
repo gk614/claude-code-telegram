@@ -368,6 +368,30 @@ class MessageOrchestrator:
                 await send_workout_now_command(context.bot, chat.id, repo)
         handlers.append(("workout", _workout_cmd))
 
+        # /done — fixate today's workout as completed
+        async def _done_cmd(update, context, **_kw):
+            from ..bot.features.workout_done import handle_done_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                comment = " ".join(context.args or []) or None
+                await handle_done_command(context.bot, chat.id, repo, comment=comment)
+        handlers.append(("done", _done_cmd))
+
+        # /skip — skip today's workout with reason
+        async def _skip_cmd(update, context, **_kw):
+            from ..bot.features.workout_done import handle_skip_command
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                reason = " ".join(context.args or []) or "no reason"
+                await handle_skip_command(context.bot, chat.id, repo, reason=reason)
+        handlers.append(("skip", _skip_cmd))
+
         # /plan slash — beautiful daily plan card
         async def _plan_cmd(update, context, **_kw):
             from ..bot.features.planning_day import send_plan_card

@@ -94,7 +94,9 @@ def _evaluate(repo: Path, today: date, *, final: bool) -> dict:
             conditions["key_tasks"] = None
             logger.exception("reward_gate: todoist check failed")
     else:
-        conditions["key_tasks"] = None  # not selected — skip
+        # No /key today — gate failure (motivates daily prioritization)
+        conditions["key_tasks"] = False
+        missed.append("⭐ Ключевые задачи не выбраны (используй /key утром)")
 
     # 4. Hard non-negotiables
     alcohol_zero = today_status.get("alcohol_zero", True)  # presumption: not drunk if no data

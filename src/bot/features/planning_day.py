@@ -209,7 +209,17 @@ async def send_key_selector(bot: Any, chat_id: int, repo: Path) -> None:
         return
 
     cis = _load_state(repo)
+    # TTL 10 min — buffer expires if /key was abandoned
+    started_at = cis.get("key_selection_started_at")
     selected = set(cis.get("key_selection_buffer", []))
+    if started_at:
+        try:
+            started_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            if (datetime.now(UTC) - started_dt).total_seconds() > 600:
+                selected = set()
+        except Exception:
+            selected = set()
+    cis["key_selection_started_at"] = datetime.now(UTC).isoformat()
 
     text = (
         f"⭐ *Выбери 3 ключевых задачи*\n\n"
