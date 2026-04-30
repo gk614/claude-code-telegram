@@ -164,13 +164,16 @@ class ClaudeCodeBot:
         from .middleware.intent_classifier import intent_classifier_middleware
         from .middleware.security import security_middleware
 
-        # Middleware runs in order of group numbers (lower = earlier)
+        # Middleware runs in order of group numbers (lower = earlier).
+        # B-P0-5 fix: each middleware MUST be in a UNIQUE group. PTB v22 only
+        # runs the first matching handler per group → previously rate_limit and
+        # intent_classifier shared group=-1, intent never fired.
         # Security middleware first (validate inputs)
         self.app.add_handler(
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(security_middleware)
             ),
-            group=-3,
+            group=-5,
         )
 
         # Authentication second
@@ -178,7 +181,7 @@ class ClaudeCodeBot:
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(auth_middleware)
             ),
-            group=-2,
+            group=-4,
         )
 
         # Rate limiting third
@@ -186,7 +189,7 @@ class ClaudeCodeBot:
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(rate_limit_middleware)
             ),
-            group=-1,
+            group=-3,
         )
 
         # Intent classifier (Layer 5/6) — Haiku pre-filter for dangerous patterns.
@@ -195,7 +198,7 @@ class ClaudeCodeBot:
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(intent_classifier_middleware)
             ),
-            group=-1,
+            group=-2,
         )
 
         # Check-in answer — captures replies to bot's AM/PM check-in messages
@@ -203,7 +206,7 @@ class ClaudeCodeBot:
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(check_in_answer_middleware)
             ),
-            group=0,
+            group=-1,
         )
 
         # Check-in lock — blocks messages when AM/PM lock is active
@@ -211,16 +214,15 @@ class ClaudeCodeBot:
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(check_in_lock_middleware)
             ),
-            group=1,
+            group=0,
         )
 
-                # Inbox-router (GenaOS pre-filter) — between rate_limit (-1) and
-        # message handlers (10). No-op when ROUTER_ENABLED=false.
+                # Inbox-router (GenaOS pre-filter). No-op when ROUTER_ENABLED=false.
         self.app.add_handler(
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(router_middleware)
             ),
-            group=2,
+            group=1,
         )
 
         logger.info("Middleware added to bot")
