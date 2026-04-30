@@ -179,6 +179,22 @@ class VoiceHandler:
         text = (getattr(response, "text", "") or "").strip()
         if not text:
             raise ValueError("OpenAI transcription returned an empty response.")
+        # Log cost: ~$0.006/min. We don't have exact duration here, estimate
+        # via byte size (~16KB/sec for ogg-opus voice). Conservative.
+        try:
+            import sys as _sys
+            if "/root/GenaOS/scripts" not in _sys.path:
+                _sys.path.insert(0, "/root/GenaOS/scripts")
+            from cost_logger import log_call as _log_call
+            est_seconds = max(1, len(voice_bytes) // 16000)
+            _log_call(
+                model="whisper-1",
+                kind="voice_transcribe",
+                input_tokens=est_seconds,  # field reused for seconds
+                output_tokens=0,
+            )
+        except Exception:
+            logger.exception("cost_logger failed for whisper (non-fatal)")
         return text
 
     def _get_openai_client(self) -> Any:

@@ -412,3 +412,60 @@ async def handle_fix(
     except Exception:
         # Falls back to a fresh reply if edit fails (e.g. message too old)
         await update.message.reply_text(body)
+
+
+# ---------------------------------------------------------------------------
+# /cost — show today's spend + baseline
+# ---------------------------------------------------------------------------
+
+
+async def handle_cost(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    settings: Any = None,
+    **_kwargs: Any,
+) -> None:
+    """Show today's API cost trace summary + 7-day baseline."""
+    from datetime import date, timedelta
+    import re as _re
+
+    if not update.effective_message:
+        return
+
+    repo = getattr(settings, "genaos_repo_path", None)
+    if not repo:
+        await update.effective_message.reply_text("genaos_repo_path не настроен")
+        return
+
+    costs_dir = Path(str(repo)) / "state" / "costs"
+    cost_re = _re.compile(r"\$([0-9]+\.[0-9]+)")
+
+    def _day_total(d):
+        f = costs_dir / f"{d.isoformat()}.md"
+        if not f.exists():
+            return 0.0, 0
+        total, n = 0.0, 0
+        for line in f.read_text(encoding="utf-8").splitlines():
+            m = cost_re.search(line)
+            if m:
+                try:
+                    total += float(m.group(1))
+                    n += 1
+                except ValueError:
+                    pass
+        return total, n
+
+    today = date.today()
+    today_total, today_n = _day_total(today)
+    last7 = [_day_total(today - timedelta(days=i + 1))[0] for i in range(7)]
+    nonzero = [t for t in last7 if t > 0]
+    baseline = sum(nonzero) / len(nonzero) if nonzero else 0.0
+
+    msg = (
+        f"💸 *Cost trace*\n"
+        f"Сегодня: ${today_total:.4f} ({today_n} вызовов)\n"
+        f"Baseline (7d avg): ${baseline:.4f}\n"
+        f"Ratio: {(today_total / baseline if baseline > 0 else 0):.2f}× (alert при >2×)"
+    )
+    await update.effective_message.reply_text(msg, parse_mode="Markdown")
+

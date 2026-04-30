@@ -43,7 +43,7 @@ from .monitor import _is_claude_internal_path, check_bash_directory_boundary
 logger = structlog.get_logger()
 
 # Fallback message when Claude produces no text but did use tools.
-TASK_COMPLETED_MSG = "✅ Task completed. Tools used: {tools_summary}"
+TASK_COMPLETED_MSG = ""  # silenced: meta-footer was noisy in chat
 
 
 @dataclass
@@ -519,6 +519,21 @@ class ClaudeSDKManager:
             for message in messages:
                 if isinstance(message, ResultMessage):
                     cost = getattr(message, "total_cost_usd", 0.0) or 0.0
+                    # Log Sonnet/Opus cost centrally — catches ALL run_command paths
+                    if cost > 0:
+                        try:
+                            import sys as _sys
+                            if "/root/GenaOS/scripts" not in _sys.path:
+                                _sys.path.insert(0, "/root/GenaOS/scripts")
+                            from cost_logger import log_call as _log_call
+                            _model_id = getattr(message, "model", "claude-sonnet-4-6") or "claude-sonnet-4-6"
+                            _log_call(
+                                model=_model_id,
+                                kind="claude_sdk",
+                                cost_override=cost,
+                            )
+                        except Exception:
+                            logger.exception("cost_logger failed in sdk_integration (non-fatal)")
                     claude_session_id = getattr(message, "session_id", None)
                     result_content = getattr(message, "result", None)
                     current_time = asyncio.get_event_loop().time()

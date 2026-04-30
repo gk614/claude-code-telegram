@@ -147,3 +147,5 @@ sessions/
 backups/
 uploads/
 config/mcp.json
+# Runtime state (check_in tracking, etc) — host-local, not source-controlled
+state/

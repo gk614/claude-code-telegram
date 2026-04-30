@@ -12,6 +12,7 @@ import structlog
 from ..claude.facade import ClaudeIntegration
 from .bus import Event, EventBus
 from .types import AgentResponseEvent, ScheduledEvent, WebhookEvent
+from ..bot.features.check_in_keyboard import send_am_check_in, send_pm_check_in, send_am_plan
 
 logger = structlog.get_logger()
 
@@ -92,6 +93,11 @@ class AgentHandler:
             job_name=event.job_name,
         )
 
+        # Intercept structured-message jobs (no Sonnet, direct keyboard send)
+        if event.job_name in ('genaos:am_check_in', 'genaos:pm_check_in', 'genaos:am_plan_send'):
+            await self._send_structured_check_in(event)
+            return
+
         prompt = event.prompt
         if event.skill_name:
             prompt = (
@@ -132,6 +138,43 @@ class AgentHandler:
                 job_id=event.job_id,
                 event_id=event.id,
             )
+
+
+    async def _send_structured_check_in(self, event: ScheduledEvent) -> None:
+        """Send AM/PM check-in directly via Telegram bot, bypassing Sonnet."""
+        from pathlib import Path
+        # We need access to the Telegram Bot instance — pull from event.target_chat_ids
+        # via the notification service's bot. Easiest: lazy import the bot from the
+        # running app singleton.
+        try:
+            from telegram.ext import Application
+            # The app is created in core.py and held there; access via global hook
+            # set up in main.py. If unavailable, fall back to logging.
+            from src.bot.core import get_running_bot  # may not exist; see fallback
+            bot = get_running_bot()
+        except Exception:
+            logger.exception("structured check-in: cannot acquire Bot instance")
+            return
+
+        repo_path_str = getattr(self, "_genaos_repo_path", None)
+        if not repo_path_str:
+            try:
+                from src.config.settings import settings as _settings
+                repo_path_str = str(_settings.genaos_repo_path)
+            except Exception:
+                repo_path_str = str(self.default_working_directory)
+        repo = Path(repo_path_str)
+
+        for chat_id in (event.target_chat_ids or []):
+            try:
+                if event.job_name == "genaos:am_check_in":
+                    await send_am_check_in(bot, chat_id, repo)
+                elif event.job_name == "genaos:pm_check_in":
+                    await send_pm_check_in(bot, chat_id, repo)
+                elif event.job_name == "genaos:am_plan_send":
+                    await send_am_plan(bot, chat_id, repo)
+            except Exception:
+                logger.exception("structured check-in: send failed", chat_id=chat_id)
 
     def _build_webhook_prompt(self, event: WebhookEvent) -> str:
         """Build a Claude prompt from a webhook event."""

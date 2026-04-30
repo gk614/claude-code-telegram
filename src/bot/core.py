@@ -28,6 +28,17 @@ from .orchestrator import MessageOrchestrator
 
 logger = structlog.get_logger()
 
+# Module-level handle to the running Bot for cross-module access (events handler etc).
+_RUNNING_BOT: Any = None
+
+
+def get_running_bot() -> Any:
+    """Return the Telegram Bot instance of the currently running ClaudeCodeBot."""
+    return _RUNNING_BOT
+
+
+
+
 
 class ClaudeCodeBot:
     """Main bot orchestrator."""
@@ -77,6 +88,8 @@ class ClaudeCodeBot:
             logger.info("Proxy configured", proxy=proxy_url)
 
         self.app = builder.build()
+        global _RUNNING_BOT
+        _RUNNING_BOT = self.app.bot
 
         # Initialize feature registry
         self.feature_registry = FeatureRegistry(
@@ -146,6 +159,8 @@ class ClaudeCodeBot:
         from .middleware.auth import auth_middleware
         from .middleware.rate_limit import rate_limit_middleware
         from .middleware.router import router_middleware
+        from .middleware.check_in_lock import check_in_lock_middleware
+        from .middleware.check_in_answer import check_in_answer_middleware
         from .middleware.security import security_middleware
 
         # Middleware runs in order of group numbers (lower = earlier)
@@ -173,13 +188,29 @@ class ClaudeCodeBot:
             group=-1,
         )
 
-        # Inbox-router (GenaOS pre-filter) — between rate_limit (-1) and
+        # Check-in answer — captures replies to bot's AM/PM check-in messages
+        self.app.add_handler(
+            MessageHandler(
+                filters.ALL, self._create_middleware_handler(check_in_answer_middleware)
+            ),
+            group=0,
+        )
+
+        # Check-in lock — blocks messages when AM/PM lock is active
+        self.app.add_handler(
+            MessageHandler(
+                filters.ALL, self._create_middleware_handler(check_in_lock_middleware)
+            ),
+            group=1,
+        )
+
+                # Inbox-router (GenaOS pre-filter) — between rate_limit (-1) and
         # message handlers (10). No-op when ROUTER_ENABLED=false.
         self.app.add_handler(
             MessageHandler(
                 filters.ALL, self._create_middleware_handler(router_middleware)
             ),
-            group=0,
+            group=2,
         )
 
         logger.info("Middleware added to bot")

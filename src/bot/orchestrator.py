@@ -331,6 +331,7 @@ class MessageOrchestrator:
         ]
         if self.settings.router_enabled:
             from .handlers.router_commands import (
+                handle_cost,
                 handle_fix,
                 handle_move,
                 handle_undo,
@@ -341,6 +342,7 @@ class MessageOrchestrator:
                     ("undo", handle_undo),
                     ("move", handle_move),
                     ("fix", handle_fix),
+                    ("cost", handle_cost),
                 ]
             )
         if self.settings.enable_project_threads:
@@ -401,6 +403,16 @@ class MessageOrchestrator:
                 pattern=r"^stop:",
             )
         )
+
+        # AM routine checkbox callback
+        from .handlers.routine_callback import handle_am_routine_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_am_routine_callback),
+                pattern=r"^am_routine:",
+            )
+        )
+
 
         # Only cd: callbacks (for project selection), scoped by pattern
         app.add_handler(
@@ -960,14 +972,19 @@ class MessageOrchestrator:
         user_id = update.effective_user.id
         message_text = update.message.text
 
-        # Escape hatches that bypass the router and pick a non-default model:
+        # Escape hatches override the default model (Haiku 4.5):
         #   - `??`  → Opus (heavy reasoning)
-        #   - `?h ` → Haiku 4.5 (cheap lookups)
+        #   - `?s ` → Sonnet 4.6 (more brain than Haiku)
+        #   - `?h ` → Haiku 4.5 (explicit, equivalent to default)
         use_opus = False
         use_haiku = False
+        use_sonnet = False
         if message_text and message_text.startswith("??"):
             use_opus = True
             message_text = message_text[2:].lstrip()
+        elif message_text and message_text.startswith("?s "):
+            use_sonnet = True
+            message_text = message_text[3:].lstrip()
         elif message_text and message_text.startswith("?h "):
             use_haiku = True
             message_text = message_text[3:].lstrip()
@@ -1088,12 +1105,15 @@ class MessageOrchestrator:
         opus_saved_model: Any = None
         opus_config = getattr(claude_integration, "config", None)
         swap_label = ""
-        if (use_opus or use_haiku) and opus_config is not None and hasattr(opus_config, "claude_model"):
+        if (use_opus or use_haiku or use_sonnet) and opus_config is not None and hasattr(opus_config, "claude_model"):
             opus_saved_model = opus_config.claude_model
             try:
                 if use_opus:
                     opus_config.claude_model = "claude-opus-4-6"
                     swap_label = "Opus 4.6"
+                elif use_sonnet:
+                    opus_config.claude_model = "claude-sonnet-4-6"
+                    swap_label = "Sonnet 4.6"
                 else:
                     opus_config.claude_model = "claude-haiku-4-5-20251001"
                     swap_label = "Haiku 4.5"
@@ -1169,6 +1189,25 @@ class MessageOrchestrator:
                     f"\n\n· ${cost:.4f} ({model_label}, "
                     f"{claude_response.num_turns} turns)"
                 )
+                # Append to state/costs/<today>.md so /cost & spike-detector see it
+                try:
+                    import sys as _sys
+                    if "/root/GenaOS/scripts" not in _sys.path:
+                        _sys.path.insert(0, "/root/GenaOS/scripts")
+                    from cost_logger import log_call as _log_call
+                    _model_id = (
+                        "claude-opus-4-6" if use_opus else
+                        "claude-sonnet-4-6" if use_sonnet else
+                        "claude-haiku-4-5-20251001"
+                    )
+                    _log_call(
+                        model=_model_id,
+                        kind="agentic_text",
+                        cost_override=cost,
+                        message_id=update.effective_message.message_id if update.effective_message else 0,
+                    )
+                except Exception:
+                    logger.exception("cost_logger failed for agentic_text (non-fatal)")
 
             formatted_messages = formatter.format_claude_response(response_content)
 
