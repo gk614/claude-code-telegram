@@ -45,11 +45,12 @@ async def handle_am_callback(
     q_id = parts[0]
     value = parts[1]
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     answers = state.setdefault("am_answers", {})
 
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
     if chat_id is None:
         await query.answer("Нет chat_id")
@@ -131,8 +132,9 @@ async def handle_am_routine_done(
         return
     await query.answer("Поехали")
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
     if chat_id is None:
         return
@@ -160,6 +162,7 @@ async def handle_am_text_reply(
     if not msg or not msg.text:
         return False
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     active = state.get("am_active_question")

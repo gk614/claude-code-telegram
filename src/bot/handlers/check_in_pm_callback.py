@@ -45,11 +45,12 @@ async def handle_pm_callback(
     q_id = parts[0]  # "pm_q0".."pm_q5"
     value = parts[1]
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     answers = state.setdefault("pm_answers", {})
 
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
     if chat_id is None:
         await query.answer("Нет chat_id")
@@ -196,6 +197,7 @@ async def handle_pm_text_reply(
     if not msg or not msg.text:
         return False
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     active = state.get("pm_active_question")

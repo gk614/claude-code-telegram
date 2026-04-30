@@ -139,6 +139,7 @@ async def handle_task_review_reply(
     if not msg or not msg.text:
         return False
 
+    settings = settings or (context.bot_data.get("settings") if context else None)
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     if not state.get("task_review_active"):

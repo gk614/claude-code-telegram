@@ -327,8 +327,9 @@ async def handle_wr_callback(update: Any, context: Any, settings: Any = None, **
         return
     action = parts[1]
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
 
     if action == "later":
@@ -358,6 +359,7 @@ async def handle_wr_text_reply(update_or_event: Any, context: Any = None, settin
     msg = update_or_event.effective_message if hasattr(update_or_event, "effective_message") else None
     if not msg or not msg.text:
         return False
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     if not state.get("weekly_review_active"):

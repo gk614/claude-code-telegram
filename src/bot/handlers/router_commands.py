@@ -432,6 +432,7 @@ async def handle_cost(
     if not update.effective_message:
         return
 
+    settings = settings or context.bot_data.get("settings")
     repo = getattr(settings, "genaos_repo_path", None)
     if not repo:
         await update.effective_message.reply_text("genaos_repo_path не настроен")

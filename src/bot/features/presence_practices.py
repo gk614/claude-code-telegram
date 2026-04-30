@@ -161,6 +161,7 @@ async def handle_practice_callback(update: Any, context: Any, settings: Any = No
         return
     slug, value = parts[1], parts[2]
 
+    settings = settings or (context.bot_data.get("settings") if context else None)
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     if value == "skip":
         await query.answer("Skip")

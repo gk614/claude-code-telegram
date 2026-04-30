@@ -305,10 +305,11 @@ async def handle_key_callback(update: Any, context: Any, settings: Any = None, *
         return
     action = parts[1]
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     cis = _load_state(repo)
     selected = set(cis.get("key_selection_buffer", []))
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
 
     if action == "toggle":

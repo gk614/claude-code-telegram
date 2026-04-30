@@ -301,10 +301,11 @@ async def handle_pw_callback(update: Any, context: Any, settings: Any = None, **
     parts = query.data.split(":", 2)
     prefix = parts[0]
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     data = state.setdefault("plan_week_data", {})
-    bot = query.bot
+    bot = context.bot
     chat_id = query.message.chat_id if query.message else None
 
     if prefix == "pw_step":
@@ -410,6 +411,7 @@ async def handle_pw_text_reply(update_or_event: Any, context: Any = None, settin
     if not msg or not msg.text:
         return False
 
+    settings = settings or context.bot_data.get("settings")
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     active = state.get("plan_week_active_step")

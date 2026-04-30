@@ -350,7 +350,7 @@ class MessageOrchestrator:
         async def _streaks_cmd(update, context, **_kw):
             from ..bot.features.habit_check import send_streaks_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -361,7 +361,7 @@ class MessageOrchestrator:
         async def _workout_cmd(update, context, **_kw):
             from ..bot.features.workout_tracker import send_workout_now_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -372,7 +372,7 @@ class MessageOrchestrator:
         async def _done_cmd(update, context, **_kw):
             from ..bot.features.workout_done import handle_done_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -384,7 +384,7 @@ class MessageOrchestrator:
         async def _skip_cmd(update, context, **_kw):
             from ..bot.features.workout_done import handle_skip_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -396,7 +396,7 @@ class MessageOrchestrator:
         async def _plan_cmd(update, context, **_kw):
             from ..bot.features.planning_day import send_plan_card
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -409,7 +409,7 @@ class MessageOrchestrator:
         async def _key_cmd(update, context, **_kw):
             from ..bot.features.planning_day import send_key_selector
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -420,7 +420,7 @@ class MessageOrchestrator:
         async def _gate_cmd(update, context, **_kw):
             from ..bot.features.reward_gate import send_gate_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -431,7 +431,7 @@ class MessageOrchestrator:
         async def _plan_week_cmd(update, context, **_kw):
             from ..bot.features.planning_week import send_step0
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -442,7 +442,7 @@ class MessageOrchestrator:
         async def _weekly_cmd(update, context, **_kw):
             from ..bot.features.weekly_review import send_aggregate
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -453,7 +453,7 @@ class MessageOrchestrator:
         async def _practice_cmd(update, context, **_kw):
             from ..bot.features.presence_practices import send_practice_show
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -466,7 +466,7 @@ class MessageOrchestrator:
         async def _parking_cmd(update, context, **_kw):
             from ..bot.features.parking_lot_cmds import handle_parking_command
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -478,7 +478,7 @@ class MessageOrchestrator:
         async def _waist_cmd(update, context, **_kw):
             from ..bot.features.body_measurements import send_waist_prompt
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -489,7 +489,7 @@ class MessageOrchestrator:
         async def _measure_cmd(update, context, **_kw):
             from ..bot.features.body_measurements import send_full_measurements_prompt
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             chat = update.effective_chat
             if chat:
@@ -500,7 +500,7 @@ class MessageOrchestrator:
         async def _cancel_cmd(update, context, **_kw):
             from ..bot.features import _state_io
             from pathlib import Path
-            settings = _kw.get("settings")
+            settings = _kw.get("settings") or context.bot_data.get("settings")
             repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
             state = _state_io.load_state(repo)
             cleared = []

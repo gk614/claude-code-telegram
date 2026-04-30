@@ -90,6 +90,7 @@ async def intent_classifier_middleware(
     text = (msg.text or msg.caption or "").strip()
     if not text:
         return await handler(event, data)
+    logger.info("intent_classifier seen", text_len=len(text), text_head=text[:40])
     # Skip for trivial messages — saves Haiku $$$
     if len(text) < 10 or text.startswith("/") or re.match(r"^[\d\s\.,-]+$", text):
         return await handler(event, data)
@@ -101,10 +102,13 @@ async def intent_classifier_middleware(
     user_id = msg.from_user.id if msg.from_user else 0
 
     # Fast pattern filter — keyword-based catch BEFORE Haiku call (saves $$$)
-    if DANGEROUS_KEYWORDS.search(text):
+    matched = DANGEROUS_KEYWORDS.search(text)
+    logger.info("intent_classifier keyword_check", matched=bool(matched), repo=str(repo))
+    if matched:
         _audit_log(repo, user_id, "keyword_match", text, "review")
         # Don't auto-block — let Haiku confirm. Many false positives in chat.
         intent = await _classify_via_haiku(text)
+        logger.info("intent_classifier haiku_result", intent=intent)
     else:
         # Most messages — skip Haiku entirely (cost optimization).
         # Trust auth + path validation + rate limit (4 of 6 layers).

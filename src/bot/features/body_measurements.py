@@ -71,6 +71,7 @@ async def handle_measurement_reply(update_or_event: Any, context: Any = None, se
     msg = update_or_event.effective_message if hasattr(update_or_event, "effective_message") else None
     if not msg or not msg.text:
         return False
+    settings = settings or (context.bot_data.get("settings") if context else None)
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     active = state.get("measurement_active")

@@ -48,6 +48,7 @@ async def handle_am_routine_callback(
     if slug not in valid_slugs:
         return
 
+    settings = settings or (context.bot_data.get("settings") if context else None)
     repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
     state = _load_state(repo)
     checks = state.setdefault(
