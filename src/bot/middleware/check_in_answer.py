@@ -64,17 +64,23 @@ def _ensure_episodic(p: Path) -> str:
 # ----- Parsers -----
 
 def parse_state_score(text: str) -> Optional[int]:
-    """Extract 1-10 state value. Look for 'состояние X' or first standalone 1-10."""
-    m = re.search(r"состояни[ея][^0-9\n]{0,30}(\d{1,2})", text, re.IGNORECASE)
-    if m:
+    """Extract 1-10 state value. B-P1-2 fix: skip ranges like '1-3'/'4-6'/'7-10'.
+
+    Strategy:
+      1. Look for 'состояние X' where X is NOT inside a range.
+      2. Fallback: first standalone number that's not part of '1-3', '4-6', etc.
+    """
+    # Match "состояние X" but reject if X is bracketed by '-' on either side
+    for m in re.finditer(r"состояни[ея][^0-9\n]{0,30}(?<![–\-])(\d{1,2})(?![–\-]\d)", text, re.IGNORECASE):
         n = int(m.group(1))
         if 1 <= n <= 10:
             return n
-    # Fallback: first standalone number 1..10 in first 200 chars
+    # Fallback: standalone number not inside range
     head = text[:200]
-    m = re.search(r"\b(10|[1-9])\b", head)
-    if m:
-        return int(m.group(1))
+    for m in re.finditer(r"(?<![–\-\d])(\d{1,2})(?![–\-]\d)", head):
+        n = int(m.group(1))
+        if 1 <= n <= 10:
+            return n
     return None
 
 
@@ -212,26 +218,38 @@ async def check_in_answer_middleware(
     repo_str = getattr(settings, "genaos_repo_path", None) if settings else None
 
     # ─── EARLY CHECK: PM step-by-step active flow ───
+    # D-P1-2: ForceReply expire — flows that opened ForceReply with sent_at older
+    # than 4 hours are considered abandoned and skipped (no false-positive write).
+    def _stale_flow(state_dict: dict, sent_key: str, max_hours: int = 4) -> bool:
+        sent = state_dict.get(sent_key)
+        if not sent:
+            return False
+        try:
+            sent_dt = datetime.fromisoformat(sent.replace("Z", "+00:00"))
+            return (datetime.now(UTC) - sent_dt).total_seconds() > max_hours * 3600
+        except Exception:
+            return False
+
     if repo_str:
         try:
             cis_state = _load_state(Path(str(repo_str)))
 
             # task_review (21:30 pre-PM) — highest priority, comes before PM
-            if cis_state.get("task_review_active"):
+            if cis_state.get("task_review_active") and not _stale_flow(cis_state, "task_review_sent_at", 4):
                 from ..features.task_review import handle_task_review_reply
                 consumed = await handle_task_review_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
 
             pm_active = cis_state.get("pm_active_question")
-            if pm_active in ("3", "5", "1_custom", "4_edit"):
+            if pm_active in ("3", "5", "1_custom", "4_edit") and not _stale_flow(cis_state, "pm_sent_at", 6):
                 from ..handlers.check_in_pm_callback import handle_pm_text_reply
                 consumed = await handle_pm_text_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
 
             am_active = cis_state.get("am_active_question")
-            if am_active in ("1", "3_custom", "4", "5"):
+            if am_active in ("1", "3_custom", "4", "5") and not _stale_flow(cis_state, "am_sent_at", 6):
                 from ..handlers.check_in_am_callback import handle_am_text_reply
                 consumed = await handle_am_text_reply(event, None, settings=settings)
                 if consumed:

@@ -109,6 +109,7 @@ def _remove_id(repo: Path, n: str) -> str | None:
 
 
 async def send_parking_list(bot: Any, chat_id: int, repo: Path) -> None:
+    from ._md_utils import escape_md
     ideas = _list_ideas(repo, limit=10)
     if not ideas:
         await bot.send_message(chat_id=chat_id, text="📦 _Parking lot пуст._", parse_mode=ParseMode.MARKDOWN)
@@ -116,21 +117,22 @@ async def send_parking_list(bot: Any, chat_id: int, repo: Path) -> None:
     parts = [f"📦 *Parking lot — последние {len(ideas)}:*\n"]
     for it in ideas:
         idea_short = it["idea"][:80] + ("…" if len(it["idea"]) > 80 else "")
-        parts.append(f"  *#{it['n']}* ({it['date']}) {idea_short}")
+        parts.append(f"  *#{it['n']}* ({escape_md(it['date'])}) {escape_md(idea_short)}")
     parts.append("\n_/parking #N — детали · /parking kill #N reason · /parking promote #N slug_")
     await bot.send_message(chat_id=chat_id, text="\n".join(parts), parse_mode=ParseMode.MARKDOWN)
 
 
 async def send_parking_card(bot: Any, chat_id: int, repo: Path, n: str) -> None:
+    from ._md_utils import escape_md
     item = _find_by_id(repo, n)
     if not item:
         await bot.send_message(chat_id=chat_id, text=f"❓ #{n} не найдена.", parse_mode=ParseMode.MARKDOWN)
         return
     text = (
-        f"📦 *#{item['n']}* ({item['date']})\n\n"
-        f"*Идея:* {item['idea']}\n"
-        f"*Источник:* {item['source']}\n"
-        f"*Оригинал:*\n> {item['raw']}\n\n"
+        f"📦 *#{item['n']}* ({escape_md(item['date'])})\n\n"
+        f"*Идея:* {escape_md(item['idea'])}\n"
+        f"*Источник:* {escape_md(item['source'])}\n"
+        f"*Оригинал:*\n> {escape_md(item['raw'])}\n\n"
         f"_/parking kill #{item['n']} reason · /parking promote #{item['n']} slug_"
     )
     await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN)

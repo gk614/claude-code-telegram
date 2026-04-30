@@ -67,7 +67,24 @@ async def handle_pm_callback(
             return
         elif value == "later30":
             await query.answer("Через 30 мин — пингну")
-            # TODO: schedule one-shot reminder
+            # B-P1-4 fix: schedule one-shot async reminder.
+            import asyncio
+
+            async def _remind():
+                await asyncio.sleep(30 * 60)
+                from ..features.check_in_pm_flow import send_pm_q0
+                # Only re-send if PM still not answered (no race with manual /checkin pm)
+                state2 = _load_state(repo)
+                if not state2.get("pm_answered") and state2.get("pm_active_question") in ("0", "skipped", None):
+                    await send_pm_q0(bot, chat_id, repo)
+
+            asyncio.create_task(_remind())
+            try:
+                await query.edit_message_text(
+                    "⏰ ОК, пингну через 30 мин. _Если бот рестартует — дёрни `/checkin pm` руками._"
+                )
+            except Exception:
+                pass
             return
         elif value == "skip":
             await query.answer("Skip ОК")

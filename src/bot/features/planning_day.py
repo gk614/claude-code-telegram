@@ -111,6 +111,7 @@ def _parse_plan_section(content: str) -> tuple[str, list[dict]]:
 
 
 def _build_card(repo: Path, today: str) -> str:
+    from ._md_utils import escape_md
     ep_content = _read(_episodic(repo, today))
 
     # Plan section
@@ -146,21 +147,21 @@ def _build_card(repo: Path, today: str) -> str:
         "",
     ]
     if top3_text:
-        lines += [f"🎯 *3 главных дела:* {top3_text}", ""]
+        lines += [f"🎯 *3 главных дела:* {escape_md(top3_text)}", ""]
     if key_items:
         lines.append("⭐ *Ключевые задачи:*")
         for k in key_items:
             mark = "✅" if k["done"] else "▢"
-            lines.append(f"  {mark} {k['text']}")
+            lines.append(f"  {mark} {escape_md(k['text'])}")
         lines.append("")
     if open_items:
         lines.append(f"📋 *Все задачи на сегодня ({len(open_items)} open):*")
         for i, item in enumerate(items, 1):
             if item["done"]:
-                lines.append(f"  {i}. ~~{item['text']}~~ ✅")
+                lines.append(f"  {i}. ~~{escape_md(item['text'])}~~ ✅")
             else:
                 star = "⭐ " if item["key"] else ""
-                lines.append(f"  {i}. {star}{item['text']}")
+                lines.append(f"  {i}. {star}{escape_md(item['text'])}")
         lines.append("")
     if not items:
         lines += ["📋 _Задачи не найдены — Todoist пуст или не синкается._", ""]
@@ -368,6 +369,7 @@ async def handle_key_callback(update: Any, context: Any, settings: Any = None, *
         marked = _apply_key_marks(repo, today, sorted(selected))
         cis["key_selection_buffer"] = []
         cis["key_tasks_today"] = marked
+        cis["key_tasks_date"] = datetime.now(UTC).date().isoformat()
         _save_state(repo, cis)
         await query.answer(f"✅ Зафиксировано {len(marked)}")
         try:

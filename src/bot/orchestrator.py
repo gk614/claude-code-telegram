@@ -495,6 +495,37 @@ class MessageOrchestrator:
             if chat:
                 await send_full_measurements_prompt(context.bot, chat.id, repo)
         handlers.append(("measure", _measure_cmd))
+
+        # /cancel — abort any active step-by-step flow (PM, AM, plan_week, weekly, task_review, measurement, key_selection)
+        async def _cancel_cmd(update, context, **_kw):
+            from ..bot.features import _state_io
+            from pathlib import Path
+            settings = _kw.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            state = _state_io.load_state(repo)
+            cleared = []
+            keys_to_clear = [
+                "pm_active_question", "am_active_question",
+                "plan_week_active_step", "weekly_review_active",
+                "task_review_active", "measurement_active",
+                "key_selection_buffer", "key_selection_started_at",
+            ]
+            for k in keys_to_clear:
+                if state.get(k):
+                    state[k] = None if k.endswith(("_question", "_step")) else False if k.endswith("_active") else []
+                    cleared.append(k.replace("_active_question", "").replace("_active_step", "").replace("_active", "").replace("_buffer", "").strip("_"))
+            _state_io.save_state(repo, state)
+            chat = update.effective_chat
+            if chat:
+                if cleared:
+                    await context.bot.send_message(
+                        chat_id=chat.id,
+                        text=f"✖ Отменены flows: {', '.join(set(cleared))}.\n_Все step-by-step сброшены._",
+                        parse_mode="Markdown",
+                    )
+                else:
+                    await context.bot.send_message(chat_id=chat.id, text="✖ Активных flows нет.")
+        handlers.append(("cancel", _cancel_cmd))
         if self.settings.enable_project_threads:
             handlers.append(("sync_threads", command.sync_threads))
 

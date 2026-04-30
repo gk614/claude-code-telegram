@@ -80,7 +80,12 @@ def _evaluate(repo: Path, today: date, *, final: bool) -> dict:
             missed.append("🌙 PM check-in не закрыт")
 
     # 3. 3 ключевые задачи в Todoist
-    key_tasks = cis.get("key_tasks_today", [])
+    # B-P1-1 day rollover: stale key_tasks from yesterday confuse counts.
+    today_iso = today.isoformat()
+    if cis.get("key_tasks_date") != today_iso:
+        key_tasks = []  # not selected today
+    else:
+        key_tasks = cis.get("key_tasks_today", [])
     if key_tasks:
         try:
             ts = _import_todoist(repo)

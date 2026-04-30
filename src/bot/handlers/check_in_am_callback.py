@@ -76,12 +76,13 @@ async def handle_am_callback(
 
     # Q3 — сон
     if q_id == "am_q3":
+        # D-P1-3: numeric values are mid-range, label shows visually as range.
         ranges = {
-            "lt5": (4.0, "<5"),
-            "5_6": (5.5, "5-6"),
-            "6_7": (6.5, "6-7"),
-            "7_8": (7.5, "7-8"),
-            "gt8": (8.5, ">8"),
+            "lt5": (4.5, "<5 ч"),
+            "5_6": (5.5, "5.5 ч"),
+            "6_7": (6.5, "6.5 ч"),
+            "7_8": (7.5, "7.5 ч"),
+            "gt8": (8.5, "8.5+ ч"),
         }
         if value == "custom":
             from telegram import ForceReply
