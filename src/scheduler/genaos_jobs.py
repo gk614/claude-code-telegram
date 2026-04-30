@@ -91,6 +91,15 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "task_review_pre_pm",
+        "cron": "30 13 * * *",  # 13:30 UTC = 21:30 CST — за 30 мин до PM на 22:00
+        "prompt": (
+            "Task review pre-PM. Этот job НЕ обрабатывается через Sonnet — "
+            "events/handlers.py перехватывает по job_name='genaos:task_review_pre_pm' "
+            "и вызывает task_review.send_task_review() напрямую (Todoist API + ForceReply)."
+        ),
+    },
+    {
         "slot": "whoop_age_weekly",
         "cron": "30 1 * * 0",
         "prompt": (

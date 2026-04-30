@@ -14,6 +14,7 @@ from .bus import Event, EventBus
 from .types import AgentResponseEvent, ScheduledEvent, WebhookEvent
 from ..bot.features.check_in_keyboard import send_am_check_in, send_pm_check_in, send_am_plan
 from ..bot.features.check_in_pm_flow import send_pm_q0
+from ..bot.features.task_review import send_task_review
 
 logger = structlog.get_logger()
 
@@ -95,7 +96,7 @@ class AgentHandler:
         )
 
         # Intercept structured-message jobs (no Sonnet, direct keyboard send)
-        if event.job_name in ('genaos:am_check_in', 'genaos:pm_check_in', 'genaos:am_plan_send'):
+        if event.job_name in ('genaos:am_check_in', 'genaos:pm_check_in', 'genaos:am_plan_send', 'genaos:task_review_pre_pm'):
             await self._send_structured_check_in(event)
             return
 
@@ -175,6 +176,8 @@ class AgentHandler:
                     await send_pm_q0(bot, chat_id, repo)
                 elif event.job_name == "genaos:am_plan_send":
                     await send_am_plan(bot, chat_id, repo)
+                elif event.job_name == "genaos:task_review_pre_pm":
+                    await send_task_review(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

@@ -221,6 +221,14 @@ async def check_in_answer_middleware(
     if repo_str:
         try:
             cis_state = _load_state(Path(str(repo_str)))
+
+            # task_review (21:30 pre-PM) — highest priority, comes before PM
+            if cis_state.get("task_review_active"):
+                from ..features.task_review import handle_task_review_reply
+                consumed = await handle_task_review_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
+
             pm_active = cis_state.get("pm_active_question")
             if pm_active in ("3", "5", "1_custom", "4_edit"):
                 from ..handlers.check_in_pm_callback import handle_pm_text_reply
