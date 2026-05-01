@@ -234,8 +234,17 @@ async def check_in_answer_middleware(
         try:
             cis_state = _load_state(Path(str(repo_str)))
 
-            # task_review (21:30 pre-PM) — highest priority, comes before PM
-            if cis_state.get("task_review_active") and not _stale_flow(cis_state, "task_review_sent_at", 4):
+            # task_review (21:30 pre-PM) — only if PM is NOT yet active.
+            # B-P0-11 fix: PM check-in (22:00) takes priority — task_review used to
+            # intercept ForceReply replies meant for PM q3/q5 because state.task_review_active
+            # didn't auto-clear at PM kickoff.
+            pm_active_now = cis_state.get("pm_active_question")
+            pm_in_progress = pm_active_now not in (None, "", "done", "skipped")
+            if (
+                cis_state.get("task_review_active")
+                and not _stale_flow(cis_state, "task_review_sent_at", 4)
+                and not pm_in_progress
+            ):
                 from ..features.task_review import handle_task_review_reply
                 consumed = await handle_task_review_reply(event, None, settings=settings)
                 if consumed:

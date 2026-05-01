@@ -130,6 +130,9 @@ async def send_pm_q0(bot: Any, chat_id: int, repo: Path) -> None:
     state["pm_answered"] = False
     state["pm_locked"] = False
     state.setdefault("pm_answers", {})
+    # B-P0-11 belt-and-suspenders: PM kickoff supersedes task_review (21:30 → 22:00 sequence)
+    state["task_review_active"] = False
+    state.pop("task_review_sent_at", None)
     _save_state(repo, state)
     msg = await bot.send_message(
         chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb
