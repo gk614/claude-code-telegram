@@ -86,7 +86,9 @@ class JobScheduler:
         Returns:
             The job ID.
         """
-        trigger = CronTrigger.from_crontab(cron_expression)
+        # B-P0-10: pass scheduler tz explicitly. Without it, from_crontab falls
+        # back to tzlocal() (UTC on this VPS) and ignores scheduler's tz setting.
+        trigger = CronTrigger.from_crontab(cron_expression, timezone=self._scheduler.timezone)
         work_dir = working_directory or self.default_working_directory
 
         job = self._scheduler.add_job(
@@ -179,7 +181,9 @@ class JobScheduler:
             for row in rows:
                 row_dict = dict(row)
                 try:
-                    trigger = CronTrigger.from_crontab(row_dict["cron_expression"])
+                    trigger = CronTrigger.from_crontab(
+                        row_dict["cron_expression"], timezone=self._scheduler.timezone
+                    )
 
                     # Parse target_chat_ids from stored string
                     chat_ids_str = row_dict.get("target_chat_ids", "")
