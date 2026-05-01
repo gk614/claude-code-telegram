@@ -59,6 +59,9 @@ class ClaudeResponse:
     error_type: Optional[str] = None
     tools_used: List[Dict[str, Any]] = field(default_factory=list)
     interrupted: bool = False
+    # B-P2-3: carry token counts so cost-trace lines show in/out (was 0 → looked anomalous)
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 @dataclass
@@ -513,13 +516,17 @@ class ClaudeSDKManager:
 
             # Extract cost, tools, and session_id from result message
             cost = 0.0
+            _in_tokens = 0
+            _out_tokens = 0
             tools_used: List[Dict[str, Any]] = []
             claude_session_id = None
             result_content = None
             for message in messages:
                 if isinstance(message, ResultMessage):
                     cost = getattr(message, "total_cost_usd", 0.0) or 0.0
-                    # Log Sonnet/Opus cost centrally — catches ALL run_command paths
+                    # Log Sonnet/Opus cost centrally — catches ALL run_command paths.
+                    # B-P2-3 fix: extract input/output tokens from ResultMessage.usage
+                    # so cost lines show in= / out= (was always 0 — looked like anomaly).
                     if cost > 0:
                         try:
                             import sys as _sys
@@ -527,10 +534,15 @@ class ClaudeSDKManager:
                                 _sys.path.insert(0, "/root/GenaOS/scripts")
                             from cost_logger import log_call as _log_call
                             _model_id = getattr(message, "model", "claude-sonnet-4-6") or "claude-sonnet-4-6"
+                            _usage = getattr(message, "usage", None) or {}
+                            _in_tokens = int(_usage.get("input_tokens", 0) or 0) + int(_usage.get("cache_creation_input_tokens", 0) or 0) + int(_usage.get("cache_read_input_tokens", 0) or 0)
+                            _out_tokens = int(_usage.get("output_tokens", 0) or 0)
                             _log_call(
                                 model=_model_id,
                                 kind="claude_sdk",
                                 cost_override=cost,
+                                input_tokens=_in_tokens,
+                                output_tokens=_out_tokens,
                             )
                         except Exception:
                             logger.exception("cost_logger failed in sdk_integration (non-fatal)")
@@ -620,6 +632,8 @@ class ClaudeSDKManager:
                 ),
                 tools_used=tools_used,
                 interrupted=interrupted,
+                input_tokens=_in_tokens,
+                output_tokens=_out_tokens,
             )
 
         except asyncio.TimeoutError:

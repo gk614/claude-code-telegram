@@ -1463,6 +1463,8 @@ class MessageOrchestrator:
                         model=_model_id,
                         kind="agentic_text",
                         cost_override=cost,
+                        input_tokens=getattr(claude_response, "input_tokens", 0),
+                        output_tokens=getattr(claude_response, "output_tokens", 0),
                         message_id=update.effective_message.message_id if update.effective_message else 0,
                     )
                 except Exception:
