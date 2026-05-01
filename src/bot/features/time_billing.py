@@ -209,7 +209,58 @@ async def write_heartbeat_to_calendar(repo: Path, activity_text: str) -> Optiona
 # Aggregate (22:30 cron)
 # ──────────────────────────────────────────────────────────────────────
 
+async def _classify_one(client: Any, activity: str, category_keys: List[str]) -> str:
+    """B-P2-1 v3: classify ONE event at a time. Haiku batch (3+) returned all
+    unknown reliably — single-event prompt is deterministic."""
+    cats_str = ", ".join(category_keys)
+    prompt = (
+        "Категории и примеры:\n"
+        "- work_futura — программирование, фикс, билд, кодинг бота, AI-стек, "
+        "Futura клиенты/документы/звонки, разбор почты, финансы (cashflow/P&L)\n"
+        "- family — время с Сашей/Ваней/Игорем, прогулка с семьёй, обед/ужин с близкими\n"
+        "- training — бег, силовая, кор-стек, отжимания, планка, hollow, целевая прогулка\n"
+        "- health_self — медитация, NSDR, холод, чтение Theory U/Wilber/Замесин, journaling, дневной сон\n"
+        "- network — интервью с фаундерами, коучинг, нетворкинг, GameDev tusovka\n"
+        "- leisure — Counter-Strike, Netflix, YouTube, скролл соцсетей, видеоигры\n"
+        "- unknown — только бессмысленный мусор ('asdf', 'XXX')\n\n"
+        f"Активность: «{activity}»\n\n"
+        f"Ответ — одно слово из: {cats_str}. Только слово. Никакого другого текста."
+    )
+    try:
+        result = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=10,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        out = (result.content[0].text or "").strip().lower().strip("`'\"")
+        out = out.split()[0] if out else "unknown"
+        return out if out in category_keys else "unknown"
+    except Exception:
+        logger.exception("classify_one failed")
+        return "unknown"
+
+
 async def _classify_via_haiku(events: List[dict], category_keys: List[str]) -> List[str]:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return ["unknown"] * len(events)
+    try:
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        # Per-event classify — see _classify_one docstring (batch was flaky)
+        results: List[str] = []
+        for ev in events:
+            text = f"{ev.get('summary','(no title)')} — {(ev.get('description') or '')[:80]}".strip(" —")
+            cat = await _classify_one(client, text, category_keys)
+            results.append(cat)
+        return results
+    except Exception:
+        logger.exception("time_billing: classify failed")
+        return ["unknown"] * len(events)
+
+
+# OLD batch implementation kept here for reference but not called:
+async def _classify_via_haiku_batch_OLD(events: List[dict], category_keys: List[str]) -> List[str]:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return ["unknown"] * len(events)
