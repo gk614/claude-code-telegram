@@ -84,8 +84,13 @@ async def handle_heartbeat_reply(
     if not state.get("heartbeat_active"):
         return False
 
+    # B-P0-12 fix: REQUIRE reply_to_message and matching id. Old code passed any
+    # plain message through when heartbeat_active=true → router-classified ideas/
+    # tasks were ALSO logged as heartbeat replies → double-counted Calendar events.
     expected_id = state.get("heartbeat_message_id")
-    if expected_id and msg.reply_to_message and msg.reply_to_message.message_id != expected_id:
+    if not msg.reply_to_message:
+        return False  # plain message, not a reply — don't intercept
+    if expected_id and msg.reply_to_message.message_id != expected_id:
         return False
 
     text = msg.text.strip()

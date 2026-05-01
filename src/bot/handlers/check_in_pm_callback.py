@@ -234,6 +234,25 @@ async def handle_pm_text_reply(
         return True
 
     if active == "5":
+        # B-P0-13: reject non-task replies — questions, sarcasm, single sentence
+        # without comma-separation. PM q5 expects task list, not a question for AI.
+        text_stripped = text.strip()
+        looks_like_question = (
+            text_stripped.endswith("?")
+            or any(text_stripped.lower().startswith(w) for w in ("а ", "что ", "как ", "почему ", "зачем ", "когда ", "где ", "кто "))
+        )
+        # No commas/newlines AND length > 30 chars → likely free-text, not list
+        no_separators = "," not in text_stripped and "\n" not in text_stripped and len(text_stripped) > 30
+        if looks_like_question or no_separators:
+            await msg.reply_text(
+                "❓ Похоже это не список задач, а свободный текст / вопрос.\n\n"
+                "PM 5/5 ждёт **задачи на завтра через запятую** — например:\n"
+                "`закрыть финплан, бег 5км, обед с Ваней`\n\n"
+                "Или /skip если задачи только в Todoist уже.",
+                parse_mode="Markdown",
+            )
+            return True
+
         # Parse comma-separated tasks → create in Todoist
         tasks_raw = [t.strip() for t in text.replace("\n", ",").split(",") if t.strip()]
         created = []
