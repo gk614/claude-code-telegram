@@ -133,6 +133,21 @@ def _evaluate(repo: Path, today: date, *, final: bool) -> dict:
         if not workout_done:
             missed.append("💪 Тренировка не зафиксирована")
 
+    # Core stack — daily streak target
+    core_f = repo / "tracks" / "body" / "daily_movement" / f"{today_iso}.md"
+    if core_f.exists():
+        conditions["core_stack"] = True
+    else:
+        conditions["core_stack"] = False
+        missed.append("🌱 Кор-стек не отмечен")
+
+    # Time-billing coverage (≥80% from billing_aggregate at 22:30)
+    cov = cis.get("billing_coverage")
+    if isinstance(cov, (int, float)):
+        conditions["billing_coverage"] = cov >= 0.8
+        if not conditions["billing_coverage"]:
+            missed.append(f"📊 Биллинг coverage {cov:.0%} (<80%)")
+
     # Score
     hard_failures = [k for k, v in conditions.items() if v is False]
     if not hard_failures:
@@ -171,6 +186,10 @@ def _format_status(conditions: dict) -> str:
     lines.append(f"🧘 Медитация: {'✅' if conditions.get('meditation') else '❌'}")
     if "caffeine_zero" in conditions:
         lines.append(f"☕ Кофеин: {'✅ 0' if conditions['caffeine_zero'] else '🔴 нарушен'}")
+    if "core_stack" in conditions:
+        lines.append(f"🌱 Кор: {'✅' if conditions['core_stack'] else '❌'}")
+    if "billing_coverage" in conditions:
+        lines.append(f"📊 Биллинг: {'✅' if conditions['billing_coverage'] else '🟡'}")
     if "workout" in conditions:
         lines.append(f"💪 Тренировка: {'✅' if conditions['workout'] else '⏳'}")
     return "\n".join(f"   {l}" for l in lines)

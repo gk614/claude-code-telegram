@@ -80,7 +80,15 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         "cron": "30 22 * * *",  # 22:30 CST — после PM check-in 22:00, перед reward_gate 23:00
         "prompt": (
             "billing_aggregate — обрабатывается напрямую через events/handlers.py "
-            "(features/time_billing.aggregate_billing — Haiku categorize timeline)."
+            "(features/time_billing.aggregate_billing — Calendar + Haiku categorize)."
+        ),
+    },
+    {
+        "slot": "billing_smartpull",
+        "cron": "*/15 9-22 * * *",  # каждые 15 мин с 09:00 до 22:00 CST
+        "prompt": (
+            "billing_smartpull — обрабатывается напрямую через events/handlers.py "
+            "(features/time_billing.smart_pull_check — gap >90 мин в Calendar → ping)."
         ),
     },
     {

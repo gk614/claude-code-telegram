@@ -496,6 +496,30 @@ class MessageOrchestrator:
                 await send_full_measurements_prompt(context.bot, chat.id, repo)
         handlers.append(("measure", _measure_cmd))
 
+        # /core — daily core stack (план/отж/hollow) — feeds core_stack streak
+        async def _core_cmd(update, context, **_kw):
+            from ..bot.features.core_done import handle_core_command
+            from pathlib import Path
+            settings = _kw.get("settings") or context.bot_data.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                args = context.args or []
+                await handle_core_command(context.bot, chat.id, repo, args)
+        handlers.append(("core", _core_cmd))
+
+        # /bill — current billing snapshot or `window` setter
+        async def _bill_cmd(update, context, **_kw):
+            from ..bot.features.time_billing import handle_bill_command
+            from pathlib import Path
+            settings = _kw.get("settings") or context.bot_data.get("settings")
+            repo = Path(str(getattr(settings, "genaos_repo_path", "."))) if settings else Path(".")
+            chat = update.effective_chat
+            if chat:
+                args = context.args or []
+                await handle_bill_command(context.bot, chat.id, repo, args)
+        handlers.append(("bill", _bill_cmd))
+
         # /cancel — abort any active step-by-step flow (PM, AM, plan_week, weekly, task_review, measurement, key_selection)
         async def _cancel_cmd(update, context, **_kw):
             from ..bot.features import _state_io

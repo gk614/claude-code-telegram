@@ -103,8 +103,18 @@ async def handle_heartbeat_reply(
     state.pop("heartbeat_message_id", None)
     _state_io.save_state(repo, state)
 
+    # v0.2: also create Google Calendar event covering the gap
+    cal_link = ""
     try:
-        await msg.reply_text(f"✅ В биллинг ({hhmm}). Спасибо.")
+        from . import time_billing
+        res = await time_billing.write_heartbeat_to_calendar(repo, text)
+        if res and res.get("ok"):
+            cal_link = " → 📅 Calendar"
+    except Exception:
+        logger.exception("heartbeat: calendar write failed (non-fatal)")
+
+    try:
+        await msg.reply_text(f"✅ В биллинг ({hhmm}){cal_link}. Спасибо.")
     except Exception:
         logger.exception("heartbeat: ack reply failed")
 

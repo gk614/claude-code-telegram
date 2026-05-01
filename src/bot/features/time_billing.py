@@ -1,25 +1,30 @@
-"""Time-billing v0.1 — дневной агрегатор биллинга в 22:30.
+"""Time-billing v0.2 — Google Calendar = source of truth.
 
-Читает timeline-файл `tracks/state/billing/<date>.md`, через Haiku классифицирует
-каждую запись в одну из 7 категорий, считает coverage + минуты по категориям,
-пишет результат в episodic под `## Биллинг дня` и шлёт сводку Гене.
+Workflow:
+  - Heartbeat (smart-pull) каждые 15 мин в waking window:
+    проверяет Calendar gap; если >90 мин без events → ForceReply ping
+  - Reply создаёт Calendar event (start = last_event_end или waking_start, end = now)
+  - В 22:30 cron агрегатор читает Calendar за день, через Haiku
+    классифицирует events, считает coverage + минуты по 7 категориям
+  - Пишет ## Биллинг дня в episodic + signal в reward-gate
+  - /bill — snapshot now; /bill window 08:00 23:30 — edit waking window
 
-Также signal в reward-gate: добавляет conditions «coverage ≥80%» и «work_futura ≥4ч».
-
-v0.1 — без Google Calendar, только timeline из heartbeat-ответов.
-v0.2 — Calendar = source of truth, smart-pull при gap >90 мин (Phase 1).
+Calendar ops via subprocess (.venv-mcp has google-api libs, bot venv doesn't).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import subprocess
 from datetime import UTC, datetime, time as dtime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 import yaml
+from telegram import ForceReply
 
 from . import _state_io
 
@@ -30,6 +35,10 @@ try:
     _LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 except Exception:
     _LOCAL_TZ = UTC
+
+
+VENV_MCP = "/root/GenaOS/.venv-mcp/bin/python"
+SCRIPT = "/root/GenaOS/scripts/billing_calendar.py"
 
 
 def _local_now() -> datetime:
@@ -46,35 +55,174 @@ def _read_yaml(repo: Path) -> dict:
         return {}
 
 
-def _parse_timeline(text: str) -> List[Tuple[str, str]]:
-    """Parse `- **HH:MM** → activity` lines. Returns [(hhmm, text), ...]."""
-    entries: List[Tuple[str, str]] = []
-    for line in text.splitlines():
-        m = re.match(r"^\s*-\s*\*\*(\d{1,2}:\d{2})\*\*\s*→\s*(.+?)\s*$", line)
-        if m:
-            entries.append((m.group(1), m.group(2)))
-    return entries
+def _waking_window(repo: Path) -> Tuple[dtime, dtime]:
+    """Read waking window from yaml or state.json override (set via /bill window)."""
+    state = _state_io.load_state(repo)
+    override = state.get("billing_window")  # {"start":"08:00","end":"23:30"}
+    if isinstance(override, dict):
+        try:
+            s = dtime.fromisoformat(override["start"])
+            e = dtime.fromisoformat(override["end"])
+            return s, e
+        except Exception:
+            pass
+    cfg = _read_yaml(repo).get("time_billing", {})
+    s = dtime.fromisoformat(cfg.get("waking_window_start", "09:00"))
+    e = dtime.fromisoformat(cfg.get("waking_window_end", "23:00"))
+    return s, e
 
 
-def _hhmm_to_minutes(hhmm: str) -> int:
-    h, m = hhmm.split(":")
-    return int(h) * 60 + int(m)
+# ──────────────────────────────────────────────────────────────────────
+# Calendar subprocess wrappers
+# ──────────────────────────────────────────────────────────────────────
+
+def _run_calendar_cmd(cmd: str, args_json: Optional[str] = None) -> Optional[Any]:
+    """Run subprocess to .venv-mcp helper. Returns parsed JSON or None on error."""
+    argv = [VENV_MCP, SCRIPT, cmd]
+    if args_json is not None:
+        argv.append(args_json)
+    try:
+        r = subprocess.run(argv, capture_output=True, timeout=20, text=True)
+        if r.returncode != 0:
+            logger.warning("calendar subprocess failed", cmd=cmd, stderr=r.stderr[:200])
+            return None
+        return json.loads(r.stdout.strip() or "null")
+    except Exception:
+        logger.exception("calendar subprocess error", cmd=cmd)
+        return None
 
 
-async def _classify_via_haiku(entries: List[Tuple[str, str]], category_keys: List[str]) -> List[str]:
-    """Batch-classify all timeline entries. Returns list of category keys."""
+def _list_today_events(repo: Path) -> List[dict]:
+    res = _run_calendar_cmd("list_today")
+    return res if isinstance(res, list) else []
+
+
+def _last_event_end(repo: Path) -> Optional[datetime]:
+    res = _run_calendar_cmd("last_event_end")
+    if not isinstance(res, dict):
+        return None
+    end = res.get("end")
+    if not end:
+        return None
+    try:
+        return datetime.fromisoformat(end).astimezone(_LOCAL_TZ)
+    except Exception:
+        return None
+
+
+def _create_calendar_event(summary: str, start: datetime, end: datetime, description: str = "") -> Optional[dict]:
+    """Create event via subprocess. Times are tz-aware datetimes."""
+    args = {
+        "summary": summary,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "description": description,
+    }
+    return _run_calendar_cmd("create_event", json.dumps(args))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Smart-pull (every 15 min cron in waking window)
+# ──────────────────────────────────────────────────────────────────────
+
+async def smart_pull_check(bot: Any, chat_id: int, repo: Path) -> None:
+    """Run every 15 min. If gap >90 мин from last event → ping Гена."""
+    cfg = _read_yaml(repo).get("time_billing", {})
+    if not cfg.get("enabled", True):
+        return
+
+    now = _local_now()
+    waking_start, waking_end = _waking_window(repo)
+    now_t = now.time()
+    if now_t < waking_start or now_t > waking_end:
+        return  # outside waking
+
+    state = _state_io.load_state(repo)
+    # Avoid double-ping while a heartbeat is already pending
+    if state.get("heartbeat_active"):
+        return
+    # Avoid pinging during PM check-in step-by-step
+    if state.get("pm_active_question") not in (None, "", "done", "skipped"):
+        return
+    # Avoid spam — last smart-pull within 60 min
+    last_pull = state.get("billing_smartpull_last")
+    if last_pull:
+        try:
+            t = datetime.fromisoformat(last_pull)
+            if (datetime.now(UTC) - t).total_seconds() < 60 * 60:
+                return
+        except Exception:
+            pass
+
+    last_end = _last_event_end(repo)
+    waking_start_dt = datetime.combine(now.date(), waking_start, tzinfo=_LOCAL_TZ)
+    anchor = last_end if last_end and last_end > waking_start_dt else waking_start_dt
+    gap_min = int((now - anchor).total_seconds() / 60)
+    if gap_min < 90:
+        return
+
+    # Trigger heartbeat — same UX
+    from .heartbeat import send_heartbeat
+    state["billing_smartpull_last"] = datetime.now(UTC).isoformat()
+    state["billing_pull_anchor"] = anchor.isoformat()
+    _state_io.save_state(repo, state)
+    await send_heartbeat(bot, chat_id, repo)
+    logger.info("smart_pull triggered heartbeat", gap_min=gap_min)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Heartbeat reply hook → create Calendar event
+# ──────────────────────────────────────────────────────────────────────
+
+async def write_heartbeat_to_calendar(repo: Path, activity_text: str) -> Optional[dict]:
+    """After heartbeat reply: create Calendar event covering the gap."""
+    now = _local_now()
+    state = _state_io.load_state(repo)
+    waking_start, _ = _waking_window(repo)
+    waking_start_dt = datetime.combine(now.date(), waking_start, tzinfo=_LOCAL_TZ)
+
+    anchor_str = state.get("billing_pull_anchor")
+    anchor: Optional[datetime] = None
+    if anchor_str:
+        try:
+            anchor = datetime.fromisoformat(anchor_str).astimezone(_LOCAL_TZ)
+        except Exception:
+            pass
+    if anchor is None:
+        last_end = _last_event_end(repo)
+        anchor = last_end if last_end and last_end > waking_start_dt else waking_start_dt
+
+    # Don't create a 0- or negative-duration event
+    if anchor >= now:
+        anchor = now - timedelta(minutes=15)
+
+    summary = activity_text[:100]
+    description = "via heartbeat ping (time-billing v0.2)"
+    res = _create_calendar_event(summary, anchor, now, description)
+    if res:
+        state.pop("billing_pull_anchor", None)
+        _state_io.save_state(repo, state)
+    return res
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Aggregate (22:30 cron)
+# ──────────────────────────────────────────────────────────────────────
+
+async def _classify_via_haiku(events: List[dict], category_keys: List[str]) -> List[str]:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.warning("time_billing: no API key, defaulting all to unknown")
-        return ["unknown"] * len(entries)
+        return ["unknown"] * len(events)
     try:
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=api_key)
         cats_str = ", ".join(category_keys)
-        bullets = "\n".join(f"{i+1}. {hhmm} — {text}" for i, (hhmm, text) in enumerate(entries))
+        bullets = "\n".join(
+            f"{i+1}. {ev.get('summary','(no title)')} — {ev.get('description','')[:80]}"
+            for i, ev in enumerate(events)
+        )
         prompt = (
-            "Классифицируй каждую активность в одну из категорий.\n"
-            "Категории и их семантика:\n"
+            "Классифицируй каждое Google Calendar event в одну из категорий:\n"
             "- work_futura: работа над Futura (звонки, переговоры, документы, продажи, разбор почты)\n"
             "- family: время с Сашей/Ваней/Игорем, семья, прогулки/еда вместе\n"
             "- training: тренировка, бег, кор-стек, силовая, целевая прогулка\n"
@@ -82,8 +230,8 @@ async def _classify_via_haiku(entries: List[Tuple[str, str]], category_keys: Lis
             "- network: интервью, коучи, новые знакомства, нетворкинг, GameDev tusovka\n"
             "- leisure: CS, Netflix, YouTube, скролл соцсетей, бесцельное в телефоне\n"
             "- unknown: непонятно или confidence низкое\n\n"
-            f"Активности:\n{bullets}\n\n"
-            f"Ответ строго в формате JSON массива из {len(entries)} строк-категорий "
+            f"Events:\n{bullets}\n\n"
+            f"Ответ строго в формате JSON массива из {len(events)} строк-категорий "
             f"(только из списка: {cats_str}). Никакого другого текста."
         )
         result = await client.messages.create(
@@ -94,65 +242,75 @@ async def _classify_via_haiku(entries: List[Tuple[str, str]], category_keys: Lis
         raw = (result.content[0].text or "").strip()
         m = re.search(r"\[.*\]", raw, re.DOTALL)
         if not m:
-            logger.warning("time_billing: Haiku no JSON, fallback unknown")
-            return ["unknown"] * len(entries)
+            return ["unknown"] * len(events)
         cats = json.loads(m.group(0))
         normalized = []
         for c in cats:
             c = (c or "").strip().lower()
             normalized.append(c if c in category_keys else "unknown")
-        # Pad/trim to length
-        while len(normalized) < len(entries):
+        while len(normalized) < len(events):
             normalized.append("unknown")
-        return normalized[: len(entries)]
+        return normalized[: len(events)]
     except Exception:
         logger.exception("time_billing: Haiku classification failed")
-        return ["unknown"] * len(entries)
+        return ["unknown"] * len(events)
 
 
 def _aggregate_minutes(
-    entries: List[Tuple[str, str]],
+    events: List[dict],
     cats: List[str],
     waking_start: dtime,
     waking_end: dtime,
+    today: datetime,
 ) -> Tuple[Dict[str, int], int]:
-    """For each entry, attribute time from previous entry (or waking_start) to itself
-    in the matching category. Returns (mins_by_cat, total_window_min).
+    """For each event, attribute its duration to its category, clipped to waking window.
+    Gaps are added to 'unknown'.
     """
-    mins_by_cat: Dict[str, int] = {}
-    total_window = (waking_end.hour * 60 + waking_end.minute) - (waking_start.hour * 60 + waking_start.minute)
+    waking_start_dt = datetime.combine(today.date(), waking_start, tzinfo=_LOCAL_TZ)
+    waking_end_dt = datetime.combine(today.date(), waking_end, tzinfo=_LOCAL_TZ)
+    total_window = int((waking_end_dt - waking_start_dt).total_seconds() / 60)
 
-    if not entries:
+    mins_by_cat: Dict[str, int] = {}
+    if not events:
+        mins_by_cat["unknown"] = total_window
         return mins_by_cat, total_window
 
-    # Sort entries chronologically
-    sorted_pairs = sorted(zip(entries, cats), key=lambda e: _hhmm_to_minutes(e[0][0]))
-    waking_start_min = waking_start.hour * 60 + waking_start.minute
-    waking_end_min = waking_end.hour * 60 + waking_end.minute
-
-    prev_min = waking_start_min
-    for (hhmm, _text), cat in sorted_pairs:
-        cur_min = _hhmm_to_minutes(hhmm)
-        if cur_min <= waking_start_min:
-            prev_min = cur_min
+    intervals: List[Tuple[datetime, datetime, str]] = []
+    for ev, cat in zip(events, cats):
+        try:
+            s = datetime.fromisoformat(ev["start"]).astimezone(_LOCAL_TZ)
+            e = datetime.fromisoformat(ev["end"]).astimezone(_LOCAL_TZ)
+        except Exception:
             continue
-        if cur_min > waking_end_min:
-            cur_min = waking_end_min
-        delta = max(0, cur_min - prev_min)
-        mins_by_cat[cat] = mins_by_cat.get(cat, 0) + delta
-        prev_min = cur_min
+        s = max(s, waking_start_dt)
+        e = min(e, waking_end_dt)
+        if e <= s:
+            continue
+        intervals.append((s, e, cat))
 
-    # Tail from last entry to waking_end → unknown
-    tail = max(0, waking_end_min - prev_min)
-    if tail > 0:
-        mins_by_cat["unknown"] = mins_by_cat.get("unknown", 0) + tail
-
+    intervals.sort(key=lambda x: x[0])
+    covered = 0
+    cursor = waking_start_dt
+    for s, e, cat in intervals:
+        if s > cursor:
+            gap = int((s - cursor).total_seconds() / 60)
+            mins_by_cat["unknown"] = mins_by_cat.get("unknown", 0) + gap
+        d = int((e - max(cursor, s)).total_seconds() / 60)
+        if d > 0:
+            mins_by_cat[cat] = mins_by_cat.get(cat, 0) + d
+            covered += d
+        cursor = max(cursor, e)
+    if cursor < waking_end_dt:
+        gap = int((waking_end_dt - cursor).total_seconds() / 60)
+        mins_by_cat["unknown"] = mins_by_cat.get("unknown", 0) + gap
     return mins_by_cat, total_window
 
 
-def _format_summary(mins_by_cat: Dict[str, int], total_window: int, cats_cfg: dict) -> str:
-    """Build markdown summary block."""
-    lines = ["## Биллинг дня", ""]
+def _format_summary(mins_by_cat: Dict[str, int], total_window: int, cats_cfg: dict, header_extra: str = "") -> str:
+    lines = ["## Биллинг дня"]
+    if header_extra:
+        lines.append(header_extra)
+    lines.append("")
     known = sum(v for k, v in mins_by_cat.items() if k != "unknown")
     coverage = known / total_window if total_window > 0 else 0.0
     lines.append(f"**Coverage:** {coverage:.0%} ({known} / {total_window} мин)")
@@ -160,9 +318,9 @@ def _format_summary(mins_by_cat: Dict[str, int], total_window: int, cats_cfg: di
     lines.append("| | Категория | Минут | Цель | Статус |")
     lines.append("|---|---|---|---|---|")
     for key, cfg in cats_cfg.items():
-        m = mins_by_cat.get(key, 0)
         if not isinstance(cfg, dict):
             continue
+        m = mins_by_cat.get(key, 0)
         emoji = cfg.get("emoji", "·")
         label = cfg.get("label", key)
         target = int(cfg.get("min_per_day") or 0)
@@ -175,7 +333,6 @@ def _format_summary(mins_by_cat: Dict[str, int], total_window: int, cats_cfg: di
 
 
 def _append_episodic(repo: Path, today: str, summary: str) -> None:
-    """Append/replace ## Биллинг дня section in today's episodic."""
     ep = repo / "tracks" / "state" / "episodic" / f"{today}.md"
     if not ep.exists():
         ep.parent.mkdir(parents=True, exist_ok=True)
@@ -186,7 +343,6 @@ def _append_episodic(repo: Path, today: str, summary: str) -> None:
         )
     txt = ep.read_text(encoding="utf-8")
     if "## Биллинг дня" in txt:
-        # Replace existing section body
         txt = re.sub(
             r"## Биллинг дня.*?(?=\n## |\Z)",
             summary,
@@ -198,38 +354,29 @@ def _append_episodic(repo: Path, today: str, summary: str) -> None:
 
 
 async def aggregate_billing(bot: Any, chat_id: int, repo: Path) -> None:
-    """22:30 cron handler — read timeline, classify, write episodic + signal."""
+    """22:30 cron — read Calendar today, classify, write episodic + signal."""
     cfg = _read_yaml(repo).get("time_billing", {})
-    if not cfg.get("enabled", False):
-        logger.info("time_billing aggregate skipped (disabled)")
+    if not cfg.get("enabled", True):
         return
 
-    today = _local_now().date().isoformat()
-    timeline_path = repo / "tracks" / "state" / "billing" / f"{today}.md"
-    if not timeline_path.exists():
-        await bot.send_message(chat_id=chat_id, text="📊 Биллинг: timeline за сегодня пуст. (Heartbeat-ответов не было.)")
-        return
+    today_dt = _local_now()
+    today_iso = today_dt.date().isoformat()
 
-    text = timeline_path.read_text(encoding="utf-8")
-    entries = _parse_timeline(text)
-    if not entries:
-        await bot.send_message(chat_id=chat_id, text="📊 Биллинг: timeline есть, но записей не распарсилось.")
-        return
-
+    events = _list_today_events(repo)
     cats_cfg = cfg.get("categories", {})
     cat_keys = list(cats_cfg.keys()) or ["work_futura", "family", "training", "health_self", "network", "leisure", "unknown"]
 
-    cats = await _classify_via_haiku(entries, cat_keys)
+    if events:
+        cats = await _classify_via_haiku(events, cat_keys)
+    else:
+        cats = []
 
-    waking_start = dtime.fromisoformat(cfg.get("waking_window_start", "09:00"))
-    waking_end = dtime.fromisoformat(cfg.get("waking_window_end", "23:00"))
+    waking_start, waking_end = _waking_window(repo)
+    mins_by_cat, total_window = _aggregate_minutes(events, cats, waking_start, waking_end, today_dt)
 
-    mins_by_cat, total_window = _aggregate_minutes(entries, cats, waking_start, waking_end)
     summary = _format_summary(mins_by_cat, total_window, cats_cfg)
+    _append_episodic(repo, today_iso, summary)
 
-    _append_episodic(repo, today, summary)
-
-    # Signal to reward-gate state
     state = _state_io.load_state(repo)
     known = sum(v for k, v in mins_by_cat.items() if k != "unknown")
     coverage = known / total_window if total_window > 0 else 0.0
@@ -241,12 +388,59 @@ async def aggregate_billing(bot: Any, chat_id: int, repo: Path) -> None:
     try:
         await bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
     except Exception:
-        logger.exception("time_billing: send summary failed")
-        # Fallback without parse_mode
         try:
-            plain = summary.replace("**", "").replace("*", "")
-            await bot.send_message(chat_id=chat_id, text=plain)
+            await bot.send_message(chat_id=chat_id, text=summary.replace("**", "").replace("*", ""))
         except Exception:
-            pass
+            logger.exception("time_billing: send summary failed")
 
-    logger.info("time_billing aggregate done", date=today, coverage=round(coverage, 2), mins=mins_by_cat)
+    logger.info("billing aggregate done", date=today_iso, coverage=round(coverage, 2), mins=mins_by_cat)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# /bill slash command
+# ──────────────────────────────────────────────────────────────────────
+
+async def handle_bill_command(bot: Any, chat_id: int, repo: Path, args: List[str]) -> None:
+    """`/bill` — snapshot now. `/bill window HH:MM HH:MM` — set waking window."""
+    if args and args[0] == "window":
+        if len(args) < 3:
+            await bot.send_message(chat_id=chat_id, text="Использование: `/bill window 08:00 23:30`", parse_mode="Markdown")
+            return
+        try:
+            s = dtime.fromisoformat(args[1])
+            e = dtime.fromisoformat(args[2])
+            assert s < e
+        except Exception:
+            await bot.send_message(chat_id=chat_id, text="❌ Неправильный формат. Пример: `/bill window 08:00 23:30`", parse_mode="Markdown")
+            return
+        state = _state_io.load_state(repo)
+        state["billing_window"] = {"start": args[1], "end": args[2]}
+        _state_io.save_state(repo, state)
+        await bot.send_message(chat_id=chat_id, text=f"✅ Окно бодрствования: {args[1]} → {args[2]}")
+        return
+
+    # snapshot now (mid-day version of aggregate)
+    cfg = _read_yaml(repo).get("time_billing", {})
+    cats_cfg = cfg.get("categories", {})
+    cat_keys = list(cats_cfg.keys()) or ["work_futura", "family", "training", "health_self", "network", "leisure", "unknown"]
+
+    events = _list_today_events(repo)
+    if not events:
+        await bot.send_message(chat_id=chat_id, text="📊 Calendar за сегодня пуст. Heartbeat-ответы создают events.")
+        return
+
+    cats = await _classify_via_haiku(events, cat_keys)
+    today_dt = _local_now()
+    waking_start, waking_end = _waking_window(repo)
+    # Snapshot: use min(now, waking_end) as end-of-day for now
+    snap_end = min(today_dt.time(), waking_end)
+    mins_by_cat, total_window = _aggregate_minutes(events, cats, waking_start, snap_end, today_dt)
+
+    summary = _format_summary(
+        mins_by_cat, total_window, cats_cfg,
+        header_extra=f"_(snapshot {today_dt.strftime('%H:%M')} — финал в 22:30)_",
+    )
+    try:
+        await bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
+    except Exception:
+        await bot.send_message(chat_id=chat_id, text=summary.replace("**", "").replace("*", ""))

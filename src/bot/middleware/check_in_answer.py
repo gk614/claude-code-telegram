@@ -279,6 +279,12 @@ async def check_in_answer_middleware(
                 consumed = await handle_heartbeat_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
+
+            # /core ForceReply (no state flag — match by reply_to_message text)
+            from ..features.core_done import handle_core_reply
+            consumed = await handle_core_reply(event, None, settings=settings)
+            if consumed:
+                raise ApplicationHandlerStop
         except ApplicationHandlerStop:
             raise
         except Exception:
