@@ -69,11 +69,18 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
     },
     {
         "slot": "heartbeat",
-        "cron": "0 19,22 * * 1-5",  # 19/22 CST — heartbeat (currently disabled),
+        "cron": "0 12,15,18 * * 1-5",  # 12/15/18 CST будни — каждые 3ч в рабочий день
         "prompt": (
-            "Heartbeat-ping. Прочитай state/protocols/check_ins.yaml → `heartbeat`. "
-            "ЕСЛИ `enabled: false` — НЕ отправляй ничего, return без действий. "
-            "ЕСЛИ enabled — отправь `prompt_template` Гене."
+            "heartbeat — обрабатывается напрямую через events/handlers.py "
+            "(features/heartbeat.send_heartbeat — ForceReply ping)."
+        ),
+    },
+    {
+        "slot": "billing_aggregate",
+        "cron": "30 22 * * *",  # 22:30 CST — после PM check-in 22:00, перед reward_gate 23:00
+        "prompt": (
+            "billing_aggregate — обрабатывается напрямую через events/handlers.py "
+            "(features/time_billing.aggregate_billing — Haiku categorize timeline)."
         ),
     },
     {

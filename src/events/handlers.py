@@ -119,6 +119,7 @@ class AgentHandler:
             'genaos:practice_morning', 'genaos:practice_afternoon', 'genaos:practice_evening',
             'genaos:food_evening_alert', 'genaos:waist_weekly', 'genaos:measurements_monthly',
             'genaos:heartbeat',  # short-circuit if enabled:false in yaml — saves $28/mo Sonnet wakes
+            'genaos:billing_aggregate',  # 22:30 — Haiku categorization of heartbeat timeline
         ):
             await self._send_structured_check_in(event)
             return
@@ -230,7 +231,6 @@ class AgentHandler:
                 elif event.job_name == "genaos:measurements_monthly":
                     await send_full_measurements_prompt(bot, chat_id, repo)
                 elif event.job_name == "genaos:heartbeat":
-                    # Read yaml — if disabled, no-op (saves Sonnet wake)
                     import yaml as _yaml
                     cfg_path = repo / "state" / "protocols" / "check_ins.yaml"
                     if cfg_path.exists():
@@ -240,7 +240,11 @@ class AgentHandler:
                                 return  # short-circuit
                         except Exception:
                             return
-                    # Future: heartbeat prompt logic here
+                    from ..bot.features.heartbeat import send_heartbeat
+                    await send_heartbeat(bot, chat_id, repo)
+                elif event.job_name == "genaos:billing_aggregate":
+                    from ..bot.features.time_billing import aggregate_billing
+                    await aggregate_billing(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

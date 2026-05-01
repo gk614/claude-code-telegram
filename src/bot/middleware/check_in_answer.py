@@ -273,6 +273,12 @@ async def check_in_answer_middleware(
                 consumed = await handle_measurement_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
+
+            if cis_state.get("heartbeat_active") and not _stale_flow(cis_state, "heartbeat_sent_at", 4):
+                from ..features.heartbeat import handle_heartbeat_reply
+                consumed = await handle_heartbeat_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
         except ApplicationHandlerStop:
             raise
         except Exception:
