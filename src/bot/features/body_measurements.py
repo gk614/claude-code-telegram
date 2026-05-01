@@ -34,9 +34,17 @@ def _save_state(repo: Path, state: dict) -> None:
 
 
 async def send_waist_prompt(bot: Any, chat_id: int, repo: Path) -> None:
-    """Sunday 09:00 — measure waist."""
+    """Sunday 09:00 (cron) or any day (slash /waist) — measure waist."""
+    from datetime import datetime, UTC
+    try:
+        from zoneinfo import ZoneInfo
+        local = datetime.now(UTC).astimezone(ZoneInfo("Asia/Shanghai"))
+    except Exception:
+        local = datetime.now(UTC)
+    is_sunday = local.weekday() == 6
+    header = "📏 *Воскресенье — замерь талию*" if is_sunday else "📏 *Замер талии* (вне расписания)"
     text = (
-        "📏 *Воскресенье — замерь талию*\n\n"
+        f"{header}\n\n"
         "На уровне пупка, спокойный живот, утром натощак.\n\n"
         "Напиши число в см (например `86.5`) или `/skip`."
     )
@@ -50,9 +58,17 @@ async def send_waist_prompt(bot: Any, chat_id: int, repo: Path) -> None:
 
 
 async def send_full_measurements_prompt(bot: Any, chat_id: int, repo: Path) -> None:
-    """1st of month 09:00 — full body measurements."""
+    """1st of month 09:00 (cron) or any day (slash /measure) — full measurements."""
+    from datetime import datetime, UTC
+    try:
+        from zoneinfo import ZoneInfo
+        local = datetime.now(UTC).astimezone(ZoneInfo("Asia/Shanghai"))
+    except Exception:
+        local = datetime.now(UTC)
+    is_first = local.day == 1
+    header = "📏 *1-го числа — полные замеры*" if is_first else "📏 *Полные замеры* (вне расписания)"
     text = (
-        "📏 *1-го числа — полные замеры*\n\n"
+        f"{header}\n\n"
         "Утром натощак. Напиши все 5 чисел через запятую или новую строку:\n\n"
         "*талия / грудь / бицепс / бедро / икра* (см)\n"
         "_+ опционально % жира если есть Withings._\n\n"
