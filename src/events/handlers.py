@@ -121,6 +121,10 @@ class AgentHandler:
             'genaos:heartbeat',  # short-circuit if enabled:false in yaml — saves $28/mo Sonnet wakes
             'genaos:billing_aggregate',  # 22:30 — Haiku categorization of Calendar
             'genaos:billing_smartpull',  # */15 — gap >90 min → ping
+            'genaos:friday_outreach',  # Cycle 1: пятница 18:00 — счётчик outreach
+            'genaos:w4_milestone_review',  # Cycle 1: 1 июня — W4 milestone
+            'genaos:w8_milestone_review',  # Cycle 1: 29 июня — W8 milestone
+            'genaos:w12_cycle_close',  # Cycle 1: 26 июля — финал цикла
         ):
             await self._send_structured_check_in(event)
             return
@@ -249,6 +253,18 @@ class AgentHandler:
                 elif event.job_name == "genaos:billing_smartpull":
                     from ..bot.features.time_billing import smart_pull_check
                     await smart_pull_check(bot, chat_id, repo)
+                elif event.job_name == "genaos:friday_outreach":
+                    from ..bot.features.friday_outreach import send_friday_outreach
+                    await send_friday_outreach(bot, chat_id, repo)
+                elif event.job_name == "genaos:w4_milestone_review":
+                    from ..bot.features.cycle_milestones import send_milestone_review
+                    await send_milestone_review(bot, chat_id, repo, phase="w4")
+                elif event.job_name == "genaos:w8_milestone_review":
+                    from ..bot.features.cycle_milestones import send_milestone_review
+                    await send_milestone_review(bot, chat_id, repo, phase="w8")
+                elif event.job_name == "genaos:w12_cycle_close":
+                    from ..bot.features.cycle_milestones import send_milestone_review
+                    await send_milestone_review(bot, chat_id, repo, phase="w12")
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

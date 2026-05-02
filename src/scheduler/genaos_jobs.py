@@ -91,6 +91,37 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
             "(features/time_billing.smart_pull_check — gap >90 мин в Calendar → ping)."
         ),
     },
+    # Cycle 1 additions (since 2026-05-04)
+    {
+        "slot": "friday_outreach",
+        "cron": "0 18 * * 5",  # 18:00 CST пятница — счётчик outreach
+        "prompt": (
+            "friday_outreach — обрабатывается напрямую через events/handlers.py "
+            "(features/friday_outreach.send_friday_outreach)."
+        ),
+    },
+    {
+        "slot": "w4_milestone_review",
+        "cron": "0 19 1 6 *",  # 19:00 CST 1 июня — конец Week 4
+        "prompt": (
+            "w4_milestone_review — обрабатывается напрямую через events/handlers.py "
+            "(features/cycle_milestones.send_milestone_review with phase=w4)."
+        ),
+    },
+    {
+        "slot": "w8_milestone_review",
+        "cron": "0 19 29 6 *",  # 19:00 CST 29 июня — конец Week 8
+        "prompt": (
+            "w8_milestone_review — features/cycle_milestones.send_milestone_review phase=w8."
+        ),
+    },
+    {
+        "slot": "w12_cycle_close",
+        "cron": "0 19 26 7 *",  # 19:00 CST 26 июля — конец Cycle 1
+        "prompt": (
+            "w12_cycle_close — features/cycle_milestones.send_milestone_review phase=w12."
+        ),
+    },
     {
         "slot": "non_negotiables_monitor",
         "cron": "0 21 * * *",  # 21:00 CST,  # 13:00 UTC = 21:00 CST

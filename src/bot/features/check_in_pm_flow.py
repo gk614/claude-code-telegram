@@ -257,7 +257,7 @@ async def send_pm_q4(bot: Any, chat_id: int, repo: Path) -> None:
 
 async def send_pm_q5(bot: Any, chat_id: int, repo: Path) -> None:
     text = (
-        "🌙 *PM 5/5*\n\n"
+        "🌙 *PM 5/6*\n\n"
         "Какие задачи на завтра в Todoist?\n\n"
         "🎙 Перечисли голосом или текстом, по пунктам.\n"
         "Я создам в Todoist с due=tomorrow.\n\n"
@@ -271,6 +271,33 @@ async def send_pm_q5(bot: Any, chat_id: int, repo: Path) -> None:
         text=text,
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ForceReply(selective=False, input_field_placeholder="Перечисли через запятую"),
+    )
+    state = _load_state(repo)
+    state["pm_message_id"] = msg.message_id
+    _save_state(repo, state)
+
+
+async def send_pm_q6(bot: Any, chat_id: int, repo: Path) -> None:
+    """Cycle 1 addition: speed_index — насколько суетился/торопился сегодня (1-10).
+    1 = шёл медленно, осознанно, потоком.
+    10 = рваная многозадачность, перепрыгивания, без финиша.
+    """
+    text = (
+        "🌙 *PM 6/6*\n\n"
+        "*Замедление-индекс:* насколько суетился/торопился сегодня?\n\n"
+        "1 = осознанно, в потоке\n"
+        "10 = рваная многозадачность, без финиша\n\n"
+        "_>7 в среднем за неделю → alert «замедляйся» (Цикл 1, трек Состояние)._"
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(str(n), callback_data=f"pm_q6:{n}") for n in range(1, 6)],
+        [InlineKeyboardButton(str(n), callback_data=f"pm_q6:{n}") for n in range(6, 11)],
+    ])
+    state = _load_state(repo)
+    state["pm_active_question"] = "6"
+    _save_state(repo, state)
+    msg = await bot.send_message(
+        chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb,
     )
     state = _load_state(repo)
     state["pm_message_id"] = msg.message_id
@@ -291,6 +318,16 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
     energy = answers.get("energy", "—")
     tomorrow_ack = answers.get("tomorrow_ack", "—")
     tasks_count = len(answers.get("tomorrow_tasks", []))
+    speed_idx = answers.get("speed_index", "—")
+
+    speed_line = ""
+    if isinstance(speed_idx, int):
+        if speed_idx >= 8:
+            speed_line = f"⚡ Замедление: {speed_idx}/10 — 🟡 высокая суета\n"
+        elif speed_idx <= 3:
+            speed_line = f"⚡ Замедление: {speed_idx}/10 — 🟢 в потоке\n"
+        else:
+            speed_line = f"⚡ Замедление: {speed_idx}/10\n"
 
     text = (
         "✅ *PM записан*\n\n"
@@ -298,7 +335,8 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
         f"Состояние: {state_now}/10\n"
         f"Истощало/энергия: _записано_\n"
         f"Завтра: {tomorrow_ack}\n"
-        f"Задач в Todoist: {tasks_count}\n\n"
+        f"Задач в Todoist: {tasks_count}\n"
+        f"{speed_line}\n"
         "_Compliance дня посчитается через 30 мин (reward gate)._"
     )
 
@@ -322,6 +360,7 @@ async def send_pm_done(bot: Any, chat_id: int, repo: Path) -> None:
         f"- Истощало/энергия: {energy}\n"
         f"- Завтра ack: {tomorrow_ack}\n"
         f"- Задач на завтра: {tasks_count}\n"
+        f"- Замедление-индекс: {speed_idx}/10\n"
     )
     pm_block = f"\n## PM рефлексия\n\n{pm_data_lines}"
 

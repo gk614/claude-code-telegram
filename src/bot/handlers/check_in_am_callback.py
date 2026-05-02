@@ -217,6 +217,42 @@ async def handle_am_text_reply(
         state["am_answers"] = answers
         _save_state(repo, state)
         await msg.reply_text("📝 Записано")
+        # Cycle 1: chain to q6 (Whoop) instead of done
+        from ..features.check_in_am_flow import send_am_q6
+        await send_am_q6(bot, chat_id, repo)
+        return True
+
+    if active == "6":
+        # Whoop reply: "recovery sleep_perf" e.g. "86 92"
+        if text.strip().lower() in ("/skip", "skip", "пропустить"):
+            answers["whoop_recovery"] = None
+            answers["whoop_sleep_perf"] = None
+        else:
+            parts = text.replace(",", " ").split()
+            nums = []
+            for p in parts:
+                p_clean = p.strip("%")
+                if p_clean.replace(".", "").isdigit():
+                    try:
+                        nums.append(float(p_clean))
+                    except ValueError:
+                        pass
+            if len(nums) >= 2:
+                answers["whoop_recovery"] = nums[0]
+                answers["whoop_sleep_perf"] = nums[1]
+            elif len(nums) == 1:
+                # single number — assume it's recovery
+                answers["whoop_recovery"] = nums[0]
+                answers["whoop_sleep_perf"] = None
+            else:
+                await msg.reply_text(
+                    "❓ Не нашёл 2 числа. Пример: `86 92`. Попробуй ещё раз или /skip.",
+                    parse_mode="Markdown",
+                )
+                return True
+        state["am_answers"] = answers
+        _save_state(repo, state)
+        await msg.reply_text("📊 Whoop записан")
         await send_am_done(bot, chat_id, repo)
         return True
 

@@ -672,6 +672,15 @@ class MessageOrchestrator:
             )
         )
 
+        # Cycle 1: Friday outreach inline-keyboard
+        from .features.friday_outreach import handle_friday_outreach_callback
+        app.add_handler(
+            CallbackQueryHandler(
+                self._inject_deps(handle_friday_outreach_callback),
+                pattern=r"^fri_outreach:",
+            )
+        )
+
 
         # Only cd: callbacks (for project selection), scoped by pattern
         app.add_handler(

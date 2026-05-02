@@ -258,7 +258,7 @@ async def check_in_answer_middleware(
                     raise ApplicationHandlerStop
 
             am_active = cis_state.get("am_active_question")
-            if am_active in ("1", "3_custom", "4", "5") and not _stale_flow(cis_state, "am_sent_at", 6):
+            if am_active in ("1", "3_custom", "4", "5", "6") and not _stale_flow(cis_state, "am_sent_at", 6):
                 from ..handlers.check_in_am_callback import handle_am_text_reply
                 consumed = await handle_am_text_reply(event, None, settings=settings)
                 if consumed:
@@ -286,6 +286,12 @@ async def check_in_answer_middleware(
             if cis_state.get("heartbeat_active") and not _stale_flow(cis_state, "heartbeat_sent_at", 4):
                 from ..features.heartbeat import handle_heartbeat_reply
                 consumed = await handle_heartbeat_reply(event, None, settings=settings)
+                if consumed:
+                    raise ApplicationHandlerStop
+
+            if cis_state.get("fri_outreach_active") and not _stale_flow(cis_state, "fri_outreach_sent_at", 4):
+                from ..features.friday_outreach import handle_friday_outreach_reply
+                consumed = await handle_friday_outreach_reply(event, None, settings=settings)
                 if consumed:
                     raise ApplicationHandlerStop
 

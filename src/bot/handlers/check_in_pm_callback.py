@@ -21,6 +21,7 @@ from ..features.check_in_pm_flow import (
     send_pm_q3,
     send_pm_q4,
     send_pm_q5,
+    send_pm_q6,
     send_pm_done,
 )
 
@@ -54,6 +55,27 @@ async def handle_pm_callback(
     chat_id = query.message.chat_id if query.message else None
     if chat_id is None:
         await query.answer("Нет chat_id")
+        return
+
+    # Q6 — speed_index (Cycle 1)
+    if q_id == "pm_q6":
+        try:
+            n = int(value)
+            if not 1 <= n <= 10:
+                await query.answer("1-10")
+                return
+        except ValueError:
+            await query.answer()
+            return
+        await query.answer(f"⚡ {n}/10")
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        answers["speed_index"] = n
+        state["pm_answers"] = answers
+        _save_state(repo, state)
+        await send_pm_done(bot, chat_id, repo)
         return
 
     # Q0 — start / later30 / skip
@@ -279,7 +301,8 @@ async def handle_pm_text_reply(
         else:
             await msg.reply_text(f"📝 Записано (но в Todoist не создалось — проверь TODOIST_API_TOKEN)")
 
-        await send_pm_done(bot, chat_id, repo)
+        # Cycle 1: chain to q6 (speed_index) instead of done directly
+        await send_pm_q6(bot, chat_id, repo)
         return True
 
     return False

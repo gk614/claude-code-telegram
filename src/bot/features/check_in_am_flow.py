@@ -156,7 +156,7 @@ async def send_am_q4(bot: Any, chat_id: int, repo: Path) -> None:
 
 async def send_am_q5(bot: Any, chat_id: int, repo: Path) -> None:
     text = (
-        "🌅 *AM 5/5*\n\n"
+        "🌅 *AM 5/6*\n\n"
         "👪 Как проведёшь время с близкими сегодня?\n\n"
         "🎙 Голос или текст."
     )
@@ -168,6 +168,33 @@ async def send_am_q5(bot: Any, chat_id: int, repo: Path) -> None:
         text=text,
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=ForceReply(selective=False, input_field_placeholder="Свободно"),
+    )
+    state = _load_state(repo)
+    state["am_message_id"] = msg.message_id
+    _save_state(repo, state)
+
+
+async def send_am_q6(bot: Any, chat_id: int, repo: Path) -> None:
+    """Cycle 1: Whoop Recovery + Sleep Performance — daily numbers.
+    Single-message ForceReply: «86 92» → recovery=86, sleep=92.
+    """
+    text = (
+        "🌅 *AM 6/6*\n\n"
+        "📊 *Whoop за ночь:* Recovery + Sleep Performance\n\n"
+        "Открой Whoop → Health Monitor → пришли 2 числа через пробел:\n"
+        "  recovery_% sleep_perf_%\n\n"
+        "Например: `86 92`\n\n"
+        "_Цель цикла 1: ≥85%/85% средние за неделю._\n"
+        "_Или /skip если Whoop ещё не синканул._"
+    )
+    state = _load_state(repo)
+    state["am_active_question"] = "6"
+    _save_state(repo, state)
+    msg = await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=ForceReply(selective=False, input_field_placeholder="recovery_% sleep_%"),
     )
     state = _load_state(repo)
     state["am_message_id"] = msg.message_id
@@ -191,12 +218,21 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
     sleep_h = answers.get("sleep_h", "—")
     top3 = answers.get("top3", "—")
     family = answers.get("family_time", "—")
+    whoop_rec = answers.get("whoop_recovery")
+    whoop_sleep = answers.get("whoop_sleep_perf")
+
+    whoop_line = ""
+    if whoop_rec is not None or whoop_sleep is not None:
+        rec_str = f"{whoop_rec:.0f}%" if whoop_rec else "—"
+        sleep_str = f"{whoop_sleep:.0f}%" if whoop_sleep else "—"
+        whoop_line = f"📊 Whoop: Recovery {rec_str} · Sleep {sleep_str}\n"
 
     text = (
         "✅ *AM записан*\n\n"
         f"☀️ Утренняя рутина: {routine_done}/{routine_total}\n"
         f"📊 Вес: {weight}\n"
         f"🌅 Состояние: {state_val}/10 · сон: {sleep_h} ч\n"
+        f"{whoop_line}"
         f"🎯 3 дела: _записано_\n"
         f"👪 Время с близкими: _записано_\n\n"
         "_Доброе утро. Поехали 💪_"
@@ -216,11 +252,17 @@ async def send_am_done(bot: Any, chat_id: int, repo: Path) -> None:
     else:
         content = f"---\ndate: {today}\ntype: daily\n---\n\n# {today}\n\n"
 
+    whoop_md = ""
+    if whoop_rec is not None or whoop_sleep is not None:
+        rec_str = f"{whoop_rec:.0f}%" if whoop_rec else "—"
+        sleep_str = f"{whoop_sleep:.0f}%" if whoop_sleep else "—"
+        whoop_md = f"- Whoop Recovery: {rec_str}\n- Whoop Sleep Performance: {sleep_str}\n"
     am_data_lines = (
         f"- Утренняя рутина: {routine_done}/{routine_total}\n"
         f"- Вес: {weight}\n"
         f"- Состояние: {state_val}/10\n"
         f"- Сон: {sleep_h} ч\n"
+        f"{whoop_md}"
         f"- 3 главных дела: {top3}\n"
         f"- Время с близкими: {family}\n"
     )
