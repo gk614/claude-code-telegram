@@ -125,6 +125,8 @@ class AgentHandler:
             'genaos:w4_milestone_review',  # Cycle 1: 1 июня — W4 milestone
             'genaos:w8_milestone_review',  # Cycle 1: 29 июня — W8 milestone
             'genaos:w12_cycle_close',  # Cycle 1: 26 июля — финал цикла
+            'genaos:cycle1_alerts',  # Cycle 1: 21:15 daily — 5 conditional alerts
+            'genaos:cycle1_late_check',  # Cycle 1: 23:30 daily — A5 late detection
         ):
             await self._send_structured_check_in(event)
             return
@@ -265,6 +267,9 @@ class AgentHandler:
                 elif event.job_name == "genaos:w12_cycle_close":
                     from ..bot.features.cycle_milestones import send_milestone_review
                     await send_milestone_review(bot, chat_id, repo, phase="w12")
+                elif event.job_name in ("genaos:cycle1_alerts", "genaos:cycle1_late_check"):
+                    from ..bot.features.cycle1_alerts import check_and_send_alerts
+                    await check_and_send_alerts(bot, chat_id, repo)
             except Exception:
                 logger.exception("structured check-in: send failed", chat_id=chat_id)
 

@@ -123,6 +123,22 @@ _DEFAULT_JOBS: list[dict[str, Any]] = [
         ),
     },
     {
+        "slot": "cycle1_alerts",
+        "cron": "15 21 * * *",  # 21:15 CST — после non_negotiables (21:00) и до task_review (21:30)
+        "prompt": (
+            "cycle1_alerts — обрабатывается напрямую через events/handlers.py "
+            "(features/cycle1_alerts.check_and_send_alerts — 5 conditional alerts с priority+dedup)."
+        ),
+    },
+    {
+        "slot": "cycle1_late_check",
+        "cron": "30 23 * * *",  # 23:30 CST — late-night detection
+        "prompt": (
+            "cycle1_late_check — также вызывает cycle1_alerts.check_and_send_alerts "
+            "для A5 (evening_excitement_late)."
+        ),
+    },
+    {
         "slot": "non_negotiables_monitor",
         "cron": "0 21 * * *",  # 21:00 CST,  # 13:00 UTC = 21:00 CST
         "prompt": (

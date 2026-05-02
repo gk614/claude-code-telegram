@@ -106,17 +106,28 @@ async def send_never_miss_twice_alert(bot: Any, chat_id: int, repo: Path) -> Non
         if misses >= 2:
             red_alerts.append((name, misses))
 
-    if not red_alerts:
+    # Cycle 1: extend with goal-specific never-miss-twice
+    cycle1_misses = []
+    try:
+        from .cycle1_never_miss import detect_consecutive_misses
+        cycle1_misses = detect_consecutive_misses(repo)
+    except Exception:
+        logger.exception("cycle1_never_miss probe failed (non-fatal)")
+
+    if not red_alerts and not cycle1_misses:
         return
 
-    parts = ["🔴 *Never miss twice — патерн обнаружен:*\n"]
+    parts = ["🔴 *Never miss twice — паттерн обнаружен:*\n"]
     for name, misses in red_alerts:
         parts.append(f"  • {name}: {misses} дня подряд")
+    for gid, label, n in cycle1_misses:
+        parts.append(f"  • Цикл 1 / {gid} {label}: {n} дн.")
     parts.append("\n_Не «ты должен» — просто помогаю заметить. Что мешает?_")
     text = "\n".join(parts)
 
     await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
-    logger.info("never_miss_twice alert sent", count=len(red_alerts))
+    logger.info("never_miss_twice alert sent",
+                count=len(red_alerts), cycle1_count=len(cycle1_misses))
 
 
 async def update_streaks_after_pm(bot: Any, chat_id: int, repo: Path) -> None:
